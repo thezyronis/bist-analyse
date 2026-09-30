@@ -39,7 +39,7 @@ import warnings
 import zlib
 from collections.abc import Sequence
 from contextlib import closing, suppress
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -3422,11 +3422,24 @@ def _cache_data(ttl: int) -> Any:
     return dekorator
 
 
+# Hinweis: Zwischengespeichert werden nur einfache Datentypen (dict, DataFrame). Eigene Klassen aus diesem
+# Skript lassen sich in Streamlit (Cloud) nicht zuverlässig serialisieren („PicklingError“).
 @_cache_data(ttl=900)
+def _daten_laden_roh(eingabe: str, zeitraum: str, intervall: str, quelle: str, suffix: str,
+                     symbol_unveraendert: bool, dividendenbereinigt: bool, csv_inhalt: bytes | None) -> dict[str, Any]:
+    paket = daten_laden(eingabe, zeitraum, intervall, quelle, suffix, symbol_unveraendert,
+                        dividendenbereinigt, csv_inhalt)
+    werte = {f: getattr(paket, f) for f in DatenPaket.__dataclass_fields__}
+    werte["ticker"] = asdict(paket.ticker)
+    return werte
+
+
 def _daten_laden_gecacht(eingabe: str, zeitraum: str, intervall: str, quelle: str, suffix: str,
                          symbol_unveraendert: bool, dividendenbereinigt: bool, csv_inhalt: bytes | None) -> DatenPaket:
-    return daten_laden(eingabe, zeitraum, intervall, quelle, suffix, symbol_unveraendert,
-                       dividendenbereinigt, csv_inhalt)
+    werte = dict(_daten_laden_roh(eingabe, zeitraum, intervall, quelle, suffix, symbol_unveraendert,
+                                  dividendenbereinigt, csv_inhalt))
+    werte["ticker"] = TickerInfo(**werte["ticker"])
+    return DatenPaket(**werte)
 
 
 @_cache_data(ttl=3600)
@@ -4833,12 +4846,24 @@ def screening_durchfuehren(ticker_liste: Sequence[str], quelle: str, bp: BudgetP
 
 
 @_cache_data(ttl=900)
-def _screening_gecacht(ticker: tuple[str, ...], quelle: str, horizont: str, max_vola: float, min_liq: float,
-                       atr_mult: float, crv: float, stunde: str) -> list[AktienBewertung]:
-    """Zwischengespeicherte Bewertung (unabhängig von Budget und Aufteilungsparametern)."""
+def _screening_roh(ticker: tuple[str, ...], quelle: str, horizont: str, max_vola: float, min_liq: float,
+                   atr_mult: float, crv: float, stunde: str) -> list[dict[str, Any]]:
+    """Zwischengespeicherte Bewertung als einfache Dicts (unabhängig von Budget und Aufteilung)."""
     bp = BudgetParameter.aus_profil(1.0, "mittel", horizont, max_vola_pct=max_vola, min_liquiditaet_tl=min_liq,
                                     atr_multiplikator=atr_mult, crv=crv)
-    return screening_durchfuehren(list(ticker), quelle, bp)
+    return [asdict(b) for b in screening_durchfuehren(list(ticker), quelle, bp)]
+
+
+def _screening_gecacht(ticker: tuple[str, ...], quelle: str, horizont: str, max_vola: float, min_liq: float,
+                       atr_mult: float, crv: float, stunde: str) -> list[AktienBewertung]:
+    ergebnis = []
+    for werte in _screening_roh(ticker, quelle, horizont, max_vola, min_liq, atr_mult, crv, stunde):
+        werte = dict(werte)
+        for feld in ("unterstuetzung", "widerstand"):
+            if werte.get(feld) is not None:
+                werte[feld] = Zone(**werte[feld])
+        ergebnis.append(AktienBewertung(**werte))
+    return ergebnis
 
 
 def _bewertungstabelle(bewertungen: Sequence[AktienBewertung]) -> pd.DataFrame:
