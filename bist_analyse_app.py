@@ -148,6 +148,635 @@ BIST_FAVORITEN: dict[str, str] = {
     "ENKAI": "Enka İnşaat",
     "ARCLK": "Arçelik",
 }
+# Alle an der Borsa İstanbul gelisteten Aktien (Kürzel|Name), Stand der TradingView-Übersicht
+# „Tüm Türk hisseleri“ (620 Werte). Neue oder umbenannte Werte können hier ergänzt werden.
+_BIST_AKTIEN_ROH = """
+A1CAP|A1 Capital Yatitim Menkul
+A1YEN|A1 Yenilenebilir Enerji Ureti
+AAGYO|Agaoglu Avrasya Gayrimen
+ACSEL|ACISELSAN ACIPAYAM SE
+ADEL|ADEL KALEMCİLİK TİCARE
+ADESE|ADESE GAYRİMENKUL YA
+ADGYO|Adra Gayrimenkul Yatirim
+AEFES|ANADOLU EFES BİRACILI
+AFYON|AFYON ÇİMENTO SANAYİ
+AGESA|AGESA HAYAT VE EMEKLİ
+AGHOL|AG ANADOLU GRUBU HO
+AGROT|Agrotech Yuksek Teknoloji
+AGYO|ATAKULE GAYRİMENKUL Y
+AHGAZ|AHLATCI DOĞAL GAZ DA
+AHSGY|Ahes Gayrimenkul Yatirim
+AKBNK|AKBANK T.A.Ş
+AKCNS|AKÇANSA ÇİMENTO SAN
+AKENR|AKENERJİ ELEKTRİK ÜRE
+AKFGY|AKFEN GAYRİMENKUL YA
+AKFIS|Akfen insaat Turizm ve Tica
+AKFYE|AKFEN YENİLENEBİLİR EN
+AKGRT|AKSİGORTA A.Ş
+AKHAN|Akhan Un Fabrikasi Ve Tari
+AKMGY|AKMERKEZ GAYRİMENK
+AKSA|AKSA AKRİLİK KİMYA SAN
+AKSEN|AKSA ENERJİ ÜRETİM A.Ş
+AKSGY|AKİŞ GAYRİMENKUL YATI
+AKSUE|AKSU ENERJİ VE TİCARET
+AKYHO|AKDENİZ YATIRIM HOLDİ
+ALARK|ALARKO HOLDİNG A.Ş
+ALBRK|ALBARAKA TÜRK KATILIM
+ALBTN|Albayrak Hazir Beton Sana
+ALCAR|ALARKO CARRIER SANAYİ
+ALCTL|ALCATEL LUCENT TELETA
+ALFAS|ALFA SOLAR ENERJİ SAN
+ALGYO|ALARKO GAYRİMENKUL Y
+ALKA|ALKİM KAĞIT SANAYİ VE T
+ALKIM|ALKİM ALKALİ KİMYA A.Ş
+ALKLC|Altinkilic Gida ve Sut Sanay
+ALTIN|DARPHANE ALTIN SERTİFİ
+ALTNY|Altinay Savunma Teknolojil
+ALVES|Alves Kablo Sanayi ve Tica
+ANELE|ANEL ELEKTRİK PROJE TA
+ANGEN|ANATOLİA TANI VE BİYOT
+ANHYT|ANADOLU HAYAT EMEKLİ
+ANSGR|ANADOLU ANONİM TÜRK
+ARASE|DOĞU ARAS ENERJİ YATI
+ARCLK|ARÇELİK A.Ş
+ARDYZ|ARD GRUP BİLİŞİM TEKN
+ARENA|ARENA BİLGİSAYAR SANA
+ARFYE|ARF Bio Yenilenebilir Enerji
+ARMGD|Armada Gida Ticaret ve S
+ARSAN|ARSAN TEKSTİL TİCARET
+ARTMS|Artemis Hali A. S
+ARZUM|ARZUM ELEKTRİKLİ EV A
+ASELS|ASELSAN ELEKTRONİK S
+ASGYO|ASCE GAYRIMENKUL YATI
+ASTOR|ASTOR ENERJİ A.Ş
+ASUZU|ANADOLU ISUZU OTOMO
+ATAGY|ATA GAYRİMENKUL YATIRI
+ATAKP|Atakey Patates Gida Sanay
+ATATP|ATP YAZILIM VE TEKNOLO
+ATATR|Ata Turizm Isletmecilik Tasi
+ATEKS|AKIN TEKSTİL A.Ş
+ATLAS|ATLAS MENKUL KIYMETL
+ATSYH|ATLANTİS YATIRIM HOLDİ
+AVGYO|AVRASYA GAYRİMENKUL
+AVHOL|AVRUPA YATIRIM HOLDİN
+AVOD|A.V.O.D. KURUTULMUŞ GI
+AVPGY|Avrupakent Gayrimenkul Y
+AYCES|ALTIN YUNUS ÇEŞME TUR
+AYDEM|AYDEM YENİLENEBİLİR E
+AYEN|AYEN ENERJİ A.Ş
+AYES|AYES ÇELİK HASIR VE ÇİT
+AYGAZ|AYGAZ A.Ş
+AZTEK|AZTEK TEKNOLOJİ ÜRÜN
+BAGFS|BAGFAŞ BANDIRMA GÜB
+BAHKM|Bahadir Kimya Sanayi Ve
+BAKAB|BAK AMBALAJ SANAYİ V
+BALAT|BALATACILAR BALATACILI
+BALSU|Balsu Gida Sanayi ve Ticar
+BANVT|BANVİT BANDIRMA VİTA
+BARMA|BAREM AMBALAJ SANAY
+BASCM|BAŞTAŞ BAŞKENT ÇİMEN
+BASGZ|BAŞKENT DOĞALGAZ DA
+BAYRK|BAYRAK EBT TABAN SANA
+BEGYO|Bati Ege Gayrimenkul Yatiri
+BERA|BERA HOLDİNG A.Ş
+BESLR|Besler Gida Ve Kimya Sana
+BESTE|Best Brands Grup Enerji Ya
+BETAE|Beta Enerji ve Teknoloji AS
+BEYAZ|BEYAZ FİLO OTO KİRALA
+BFREN|BOSCH FREN SİSTEMLERİ
+BIENY|BİEN YAPI ÜRÜNLERİ SAN
+BIGCH|BÜYÜK ŞEFLER GIDA TURİ
+BIGEN|Birlesim Grup Enerji Yatiriml
+BIGTK|Big Medya Teknoloji A.S
+BIMAS|BİM BİRLEŞİK MAĞAZALA
+BINBN|Bin Ulasim Ve Akilli Sehir Te
+BINHO|1000 Yatirimlar Holding AS
+BIOEN|BİOTREND ÇEVRE VE ENE
+BIZIM|BİZİM TOPTAN SATIŞ MAĞ
+BJKAS|BEŞİKTAŞ FUTBOL YATIRI
+BKRGY|Bakirci Gayrimenkul Yatirim
+BLCYT|BİLİCİ YATIRIM SANAYİ VE
+BLUME|Blume Metal Kimya Anoni
+BMSCH|BMS ÇELİK HASIR SANAY
+BMSTL|BMS BİRLEŞİK METAL SA
+BNTAS|BANTAŞ BANDIRMA AMB
+BOBET|BOĞAZİÇİ BETON SANAYİ
+BORLS|Borlease Otomotiv AS
+BORSK|Bor Seker A.S
+BOSSA|BOSSA TİCARET VE SANA
+BRISA|BRİSA BRIDGESTONE SAB
+BRKO|BİRKO BİRLEŞİK KOYUNLU
+BRKSN|BERKOSAN YALITIM VE T
+BRKVY|BİRİKİM VARLIK YÖNETİM
+BRLSM|BİRLEŞİM MÜHENDİSLİK I
+BRMEN|BİRLİK MENSUCAT TİCAR
+BRSAN|BORUSAN MANNESMAN
+BRYAT|BORUSAN YATIRIM VE PA
+BSOKE|BATISÖKE SÖKE ÇİMENT
+BTCIM|BATIÇİM BATI ANADOLU Ç
+BUCIM|BURSA ÇİMENTO FABRİK
+BULGS|Bulls Girisim Sermayesi Yat
+BURCE|BURÇELİK BURSA ÇELİK
+BURVA|BURÇELİK VANA SANAYİ V
+BVSAN|BÜLBÜLOĞLU VİNÇ SANA
+BYDNR|Baydoner Restoranlari A.S
+CANTE|ÇAN2 TERMİK A.Ş
+CASA|CASA EMTİA PETROL KİM
+CATES|Cates Elektrik Uretim Anoni
+CCOLA|COCA-COLA İÇECEK A.Ş
+CELHA|ÇELİK HALAT VE TEL SAN
+CEMAS|ÇEMAŞ DÖKÜM SANAYİ
+CEMTS|ÇEMTAŞ ÇELİK MAKİNA S
+CEMZY|CEM ZEYTIN ANONIM SIR
+CEOEM|CEO EVENT MEDYA A.Ş
+CGCAM|Cagdas Cam Sanayi ve Ti
+CIMSA|ÇİMSA ÇİMENTO SANAYİ
+CITAS|Citlekci Magazacilik Gida AS
+CLEBI|ÇELEBİ HAVA SERVİSİ A.Ş
+CMBTN|ÇİMBETON HAZIRBETON
+CMENT|ÇİMENTAŞ İZMİR ÇİMENT
+CONSE|CONSUS ENERJİ İŞLETM
+COSMO|COSMOS YATIRIM HOLDİ
+CRDFA|CREDITWEST FAKTORİNG
+CRFSA|CARREFOURSA CARREFO
+CUSAN|ÇUHADAROĞLU METAL S
+CVKMD|CVK MADEN İŞLETMELE
+CWENE|CW ENERJİ MÜHENDİSLİ
+DAGI|DAGİ GİYİM SANAYİ VE Tİ
+DAPGM|DAP GAYRİMENKUL GELİ
+DARDL|DARDANEL ÖNENTAŞ GID
+DCTTR|DCT Trading Dis Ticaret An
+DENGE|DENGE YATIRIM HOLDİNG
+DERHL|DERLÜKS YATIRIM HOLDİ
+DERIM|DERİMOD KONFEKSİYON
+DESA|DESA DERİ SANAYİ VE TİC
+DESPC|DESPEC BİLGİSAYAR PAZ
+DEVA|DEVA HOLDİNG A.Ş
+DGATE|DATAGATE BİLGİSAYAR M
+DGGYO|DOĞUŞ GAYRİMENKUL Y
+DGNMO|DOĞANLAR MOBİLYA GR
+DIRIT|DİRİTEKS DİRİLİŞ TEKSTİL
+DITAS|DİTAŞ DOĞAN YEDEK PAR
+DMLKT|Emlak Konut Gayrimenkul
+DMRGD|DMR Unlu Mamuller Ureti
+DMSAS|DEMİSAŞ DÖKÜM EMAYE
+DNISI|DİNAMİK ISI MAKİNA YALI
+DOAS|DOĞUŞ OTOMOTİV SERVİ
+DOFER|Dofer Yapi Maizemeleri Sa
+DOFRB|DOF Robotik Sanayi Anoni
+DOGUB|DOĞUSAN BORU SANAYİİ
+DOHOL|DOĞAN ŞİRKETLER GRU
+DOKTA|DÖKTAŞ DÖKÜMCÜLÜK T
+DSTKF|DESTEK FAKTORİNG A.Ş
+DUNYH|Dunya Holding Anonim Sir
+DURDO|DURAN DOĞAN BASIM V
+DURKN|Durukan Sekerleme Sanayi
+DYOBY|DYO BOYA FABRİKALARI S
+DZGYO|DENİZ GAYRİMENKUL YAT
+EBEBK|EBEBEK MAGAZACILIK AN
+ECILC|EİS ECZACIBAŞI İLAÇ SIN
+ECOGR|Ecogreen Enerji Holding A.S
+ECZYT|ECZACIBAŞI YATIRIM HOL
+EDATA|E-DATA TEKNOLOJİ PAZA
+EDIP|EDİP GAYRİMENKUL YATIR
+EFOR|Efor Yatirim Sanayi Ticaret
+EGEEN|EGE ENDÜSTRİ VE TİCAR
+EGEGY|Egeyapi Avrupa Gayrimenk
+EGEPO|NASMED ÖZEL SAĞLIK Hİ
+EGGUB|EGE GÜBRE SANAYİİ A.Ş
+EGPRO|EGE PROFİL TİCARET VE
+EGSER|EGE SERAMİK SANAYİ VE
+EKDMR|Ekinciler Demir ve Celik Sa
+EKIM|EKİM TURİZM TİCARET VE
+EKIZ|EKİZ KİMYA SANAYİ VE Tİ
+EKOS|Ekos Teknoloji ve Elektrik AS
+EKSUN|EKSUN GIDA TARIM SANA
+ELITE|ELİTE NATUREL ORGANİK
+EMKEL|EMEK ELEKTRİK ENDÜST
+EMNIS|EMİNİŞ AMBALAJ SANAYİ
+EMPAE|Empa Elektronik Sanayi ve
+ENDAE|Enda Enerji Holding Anoni
+ENERY|Enerya Enerji A.S
+ENJSA|ENERJİSA ENERJİ A.Ş
+ENKAI|ENKA İNŞAAT VE SANAYİ
+ENPRA|Enpara Bank A.S
+ENSRI|ENSARİ DERİ GIDA SANAYİ
+ENTRA|IC Enterra Yenilenebilir Ene
+EPLAS|EGEPLAST EGE PLASTİK
+ERBOS|ERBOSAN ERCİYAS BORU
+ERCB|ERCİYAS ÇELİK BORU SA
+EREGL|EREĞLİ DEMİR VE ÇELİK F
+ERSU|ERSU MEYVE VE GIDA SA
+ESCAR|ESCAR FİLO KİRALAMA Hİ
+ESCOM|ESCORT TEKNOLOJİ YATI
+ESEN|ESENBOĞA ELEKTRİK ÜR
+ETILR|ETİLER GIDA VE TİCARİ YA
+ETYAT|EURO TREND YATIRIM OR
+EUHOL|EURO YATIRIM HOLDİNG
+EUKYO|EURO KAPİTAL YATIRIM O
+EUPWR|EUROPOWER ENERJİ VE
+EUREN|EUROPEN ENDÜSTRİ İNŞ
+EUYO|EURO MENKUL KIYMET YA
+EYGYO|EYG GAYRİMENKUL YATIRI
+FADE|FADE GIDA YATIRIM SANA
+FENER|FENERBAHÇE FUTBOL A.Ş
+FLAP|FLAP KONGRE TOPLANTI
+FMIZP|FEDERAL-MOGUL İZMİT P
+FONET|FONET BİLGİ TEKNOLOJİL
+FORMT|FORMET METAL VE CAM
+FORTE|FORTE BILGI ILETISIM TEK
+FRIGO|FRİGO-PAK GIDA MADDE
+FRMPL|Formul Plastik Ve Metal Sa
+FROTO|FORD OTOMOTİV SANAYİ
+FZLGY|FUZUL GAYRIMENKUL YAT
+GARAN|TÜRKİYE GARANTİ BANK
+GARFA|GARANTİ FAKTORİNG A.Ş
+GATEG|Gate Group Teknoloji Medy
+GEDIK|GEDİK YATIRIM MENKUL D
+GEDZA|GEDİZ AMBALAJ SANAYİ
+GENIL|GEN İLAÇ VE SAĞLIK ÜRÜ
+GENKM|Gentas Kimya Sanayi ve Ti
+GENTS|GENTAŞ DEKORATİF YÜZ
+GEREL|GERSAN ELEKTRİK TİCAR
+GESAN|GİRİŞİM ELEKTRİK SANAY
+GIPTA|Gipta Ofis Kirtasiye ve Pro
+GLBMD|GLOBAL MENKUL DEĞER
+GLCVY|GELECEK VARLIK YÖNETİ
+GLRMK|Gulermak Agir Sanayi Insa
+GLRYH|GÜLER YATIRIM HOLDİNG
+GLYHO|GLOBAL YATIRIM HOLDİN
+GMTAS|GİMAT MAĞAZACILIK SA
+GOKNR|GÖKNUR GIDA MADDELE
+GOLDA|Golda Gida Sanayi ve Ticar
+GOLTS|GÖLTAŞ GÖLLER BÖLGES
+GOODY|GOODYEAR LASTİKLERİ T
+GOZDE|GÖZDE GİRİŞİM SERMAY
+GRNYO|GARANTİ YATIRIM ORTAK
+GRSEL|GÜR-SEL TURİZM TAŞIMA
+GRTHO|Grainturk Holding A.S
+GSDDE|GSD DENİZCİLİK GAYRİM
+GSDHO|GSD HOLDİNG A.Ş
+GSRAY|GALATASARAY SPORTİF S
+GUBRF|GÜBRE FABRİKALARI T.A.Ş
+GUNDG|Gundogdu Gida Sut Urunl
+GWIND|GALATA WIND ENERJİ A.Ş
+GZNMI|GEZİNOMİ SEYAHAT TURİ
+HALKB|TÜRKİYE HALK BANKASI
+HATEK|HATEKS HATAY TEKSTİL İ
+HATSN|Hat-San Gemi Insaa Bakim
+HDFGS|HEDEF GİRİŞİM SERMAYE
+HEDEF|HEDEF HOLDİNG A.Ş
+HEKTS|HEKTAŞ TİCARET T.A.Ş
+HKTM|HİDROPAR HAREKET KON
+HLGYO|HALK GAYRİMENKUL YATI
+HOROZ|Horoz Lojistik Kargo Hizme
+HRKET|Hareket Proje Tasimaciligi v
+HTTBT|HİTİT BİLGİSAYAR HİZMET
+HUBVC|HUB GİRİŞİM SERMAYESİ
+HUNER|HUN YENİLENEBİLİR ENE
+HURGZ|HÜRRİYET GAZETECİLİK
+ICBCT|ICBC TURKEY BANK A.Ş
+ICUGS|ICU Girisim Sermayesi Yatir
+IDGYO|İDEALİST GAYRİMENKUL Y
+IEYHO|IŞIKLAR ENERJİ VE YAPI H
+IHAAS|İHLAS HABER AJANSI A.Ş
+IHEVA|İHLAS EV ALETLERİ İMAL
+IHGZT|İHLAS GAZETECİLİK A.Ş
+IHLAS|İHLAS HOLDİNG A.Ş
+IHLGM|İHLAS GAYRİMENKUL PR
+IHYAY|İHLAS YAYIN HOLDİNG A.Ş
+IMASM|İMAŞ MAKİNA SANAYİ A.Ş
+INDES|İNDEKS BİLGİSAYAR SİSTE
+INFO|İNFO YATIRIM MENKUL DE
+INGRM|INGRAM MİCRO BİLİŞİM Sİ
+INTEK|Innosa Teknoloji Anonim Sir
+INTEM|İNTEMA İNŞAAT VE TESİS
+INTET|Intetra Teknoloji ve Bilisim
+INVEO|INVEO YATIRIM HOLDİNG
+INVES|INVESTCO HOLDİNG A.Ş
+ISBIR|İŞBİR HOLDİNG A.Ş
+ISDMR|İSKENDERUN DEMİR VE Ç
+ISFIN|İŞ FİNANSAL KİRALAMA A
+ISGYO|İŞ GAYRİMENKUL YATIRIM
+ISKPL|IŞIK PLASTİK SANAYİ VE D
+ISMEN|İŞ YATIRIM MENKUL DEĞE
+ISSEN|İŞBİR SENTETİK DOKUMA
+ISVEA|Isvea Seramik ve Banyo Ur
+IZENR|Izdemir Enerji Elektrik Ureti
+IZFAS|İZMİR FIRÇA SANAYİ VE Tİ
+IZINV|İZ YATIRIM HOLDİNG A.Ş
+IZMDC|İZMİR DEMİR ÇELİK SANA
+JANTS|JANTSA JANT SANAYİ VE
+KAPLM|KAPLAMİN AMBALAJ SA
+KARCL|Kardemir Celik Sanayi AS
+KAREL|KAREL ELEKTRONİK SAN
+KARSN|KARSAN OTOMOTİV SAN
+KARTN|KARTONSAN KARTON SA
+KATMR|KATMERCİLER ARAÇ ÜST
+KAYSE|KAYSERİ ŞEKER FABRİKA
+KBORU|Kuzey Boru A.S
+KCAER|KOCAER ÇELİK SANAYİ VE
+KCHOL|KOÇ HOLDİNG A.Ş
+KENT|KENT GIDA MADDELERİ S
+KERVN|KERVANSARAY YATIRIM H
+KFEIN|KAFEİN YAZILIM HİZMETL
+KGYO|KORAY GAYRİMENKUL YA
+KIMMR|ERSAN ALIŞVERİŞ HİZME
+KLGYO|KİLER GAYRİMENKUL YATI
+KLKIM|KALEKİM KİMYEVİ MADD
+KLMSN|KLİMASAN KLİMA SANAYİ
+KLNMA|TÜRKİYE KALKINMA VE Y
+KLRHO|KİLER HOLDİNG A.Ş
+KLSER|Kaleseramik Canakkale Kal
+KLSYN|KOLEKSİYON MOBİLYA SA
+KLYPV|Kalyon Gunes Teknolojileri
+KMPUR|KİMTEKS POLİÜRETAN S
+KNFRT|KONFRUT GIDA SANAYİ V
+KOCMT|Koc Metalurji AS
+KONKA|KONYA KAĞIT SANAYİ VE
+KONTR|KONTROLMATİK TEKNOL
+KONYA|KONYA ÇİMENTO SANAYİİ
+KOPOL|KOZA POLYESTER SANAYİ
+KORDS|KORDSA TEKNİK TEKSTİL
+KOTON|KOTON MAĞAZACILIK TE
+KPEKS|Kapeks Kimya Sanayi AS
+KRDMA|KARDEMİR KARABÜK DE
+KRGYO|KÖRFEZ GAYRİMENKUL Y
+KRONT|KRON TELEKOMÜNİKASY
+KRPLS|KOROPLAST TEMİZLİK AM
+KRSTL|KRİSTAL KOLA VE MEŞRU
+KRTEK|KARSU TEKSTİL SANAYİİ
+KRVGD|KERVAN GIDA SANAYİ VE
+KSTUR|KUŞTUR KUŞADASI TURİZ
+KTLEV|KATILIMEVIM TASARRUF
+KTSKR|KÜTAHYA ŞEKER FABRİKA
+KUTPO|KÜTAHYA PORSELEN SA
+KUVVA|KUVVA GIDA TİCARET VE
+KUYAS|KUYAŞ YATIRIM A.Ş
+KZBGY|KIZILBÜK GAYRİMENKUL
+KZGYO|Kuzugrup Gayrimenkul Yati
+LIDER|LDR TURİZM A.Ş
+LIDFA|LİDER FAKTORİNG A.Ş
+LILAK|Lila Kagit Sanayi Ve Ticaret
+LINK|LİNK BİLGİSAYAR SİSTEML
+LKMNH|LOKMAN HEKİM ENGÜRÜ
+LMKDC|Limak Dogu Anadolu Cime
+LOGO|LOGO YAZILIM SANAYİ VE
+LRSHO|Loras Holding Anonim Sirk
+LUKSK|LÜKS KADİFE TİCARET VE
+LXGYO|Luxera Gayrimenkul Yatirim
+LYDHO|Lydia Holding A.S
+LYDYE|Lydia Yesil Enerji kaynaklari
+MAALT|MARMARİS ALTINYUNUS
+MACKO|MACKOLİK İNTERNET HİZ
+MAGEN|MARGÜN ENERJİ ÜRETİM
+MAKIM|MAKİM MAKİNA TEKNOL
+MAKTK|MAKİNA TAKIM ENDÜSTR
+MANAS|MANAS ENERJİ YÖNETİM
+MARBL|Tureks Turunc Madencilik I
+MARMR|Marmara Holding AS
+MARTI|MARTI OTEL İŞLETMELERİ
+MASFN|Masfen Enerji AS
+MAVI|MAVİ GİYİM SANAYİ VE Tİ
+MCARD|Metropal Kurumsal Hizmet
+MEDTR|MEDİTERA TIBBİ MALZEM
+MEGAP|MEGA POLİETİLEN KÖPÜ
+MEGMT|Mega Metal Sanayi Ve Tic
+MEKAG|Meka Global Makine Imala
+MEPET|MEPET METRO PETROL V
+MERCN|MERCAN KİMYA SANAYİ V
+MERIT|MERİT TURİZM YATIRIM V
+MERKO|MERKO GIDA SANAYİ VE
+METEN|METGUN Enerji Yatirimlari
+METRO|METRO TİCARİ VE MALİ Y
+MEYSU|Meysu Gida Sanayi Ve Tic
+MGROS|MİGROS TİCARET A.Ş
+MHRGY|MHR Gayrimenkul Yatirim
+MIATK|MİA TEKNOLOJİ A.Ş
+MMCAS|MMC SANAYİ VE TİCARİ Y
+MNDRS|MENDERES TEKSTİL SAN
+MNDTR|MONDİ TURKEY OLUKLU
+MOBTL|MOBİLTEL İLETİŞİM HİZM
+MOGAN|Mogan Enerji Yatirim Holdi
+MOPAS|Mopas Marketcilik Gida Sa
+MPARK|MLP SAĞLIK HİZMETLERİ
+MRGYO|MARTI GAYRİMENKUL YA
+MRSHL|MARSHALL BOYA VE VER
+MSGYO|MİSTRAL GAYRİMENKUL
+MTRKS|MATRİKS FİNANSAL TEK
+MTRYO|METRO YATIRIM ORTAKLI
+MZHLD|MAZHAR ZORLU HOLDİN
+NATEN|NATUREL YENİLENEBİLİR
+NETAS|NETAŞ TELEKOMÜNİKASY
+NETCD|Netcad Yazilim A.S
+NETGL|Net Global Endustriyel Yatir
+NIBAS|NİĞBAŞ NİĞDE BETON SA
+NTGAZ|NATURELGAZ SANAYİ VE
+NTHOL|NET HOLDİNG A.Ş
+NUGYO|NUROL GAYRİMENKUL YA
+NUHCM|NUH ÇİMENTO SANAYİ A
+OBAMS|Oba Makarnacilik Sanayi V
+OBASE|OBASE BİLGİSAYAR VE DA
+ODAS|ODAŞ ELEKTRİK ÜRETİM
+ODINE|Odine Solutions Teknoloji T
+OFSYM|Ofis Yem Gida Sanayi ve Ti
+ONCSM|ONCOSEM ONKOLOJİK S
+ONRYT|Onur Yuksek Teknoloji AS
+ORCAY|ORÇAY ORTAKÖY ÇAY SA
+ORGE|ORGE ENERJİ ELEKTRİK T
+ORMA|ORMA ORMAN MAHSULL
+ORZAX|Orzaks Ilac ve Kimya Sana
+OSMEN|OSMANLI YATIRIM MENK
+OSTIM|OSTİM ENDÜSTRİYEL YATI
+OTKAR|OTOKAR OTOMOTİV VE S
+OTTO|OTTO HOLDİNG A.Ş
+OYAKC|OYAK ÇİMENTO FABRİKAL
+OYAYO|OYAK YATIRIM ORTAKLIĞI
+OYLUM|OYLUM SINAİ YATIRIMLA
+OYYAT|OYAK YATIRIM MENKUL D
+OZATD|OZATA DENIZCILIK SANAY
+OZGYO|ÖZDERİCİ GAYRİMENKUL
+OZKGY|ÖZAK GAYRİMENKUL YATI
+OZRDN|ÖZERDEN PLASTİK SANA
+OZSUB|ÖZSU BALIK ÜRETİM A.Ş
+OZYSR|Ozyasar Tel ve Galvanizlem
+PAGYO|PANORA GAYRİMENKUL Y
+PAHOL|PASIFIK HOLDING A.S
+PAMEL|PAMEL YENİLENEBİLİR EL
+PAPIL|PAPİLON SAVUNMA TEKN
+PARSN|PARSAN MAKİNA PARÇAL
+PASEU|Pasifik Eurasia Lojistik dis T
+PATEK|Pasifik Teknoloji AS
+PCILT|PC İLETİŞİM VE MEDYA Hİ
+PEKGY|PEKER GAYRİMENKUL YA
+PENGD|PENGUEN GIDA SANAYİ A
+PENTA|PENTA TEKNOLOJİ ÜRÜN
+PETKM|PETKİM PETROKİMYA HO
+PETUN|PINAR ENTEGRE ET VE U
+PGSUS|PEGASUS HAVA TAŞIMACI
+PINSU|PINAR SU VE İÇECEK SAN
+PKART|PLASTİKKART AKILLI KAR
+PKENT|PETROKENT TURİZM A.Ş
+PLTUR|PLATFORM TURİZM TAŞI
+PNLSN|PANELSAN ÇATI CEPHE Sİ
+PNSUT|PINAR SÜT MAMULLERİ S
+POLHO|POLİSAN HOLDİNG A.Ş
+POLTK|POLİTEKNİK METAL SANA
+PRDGS|PARDUS GİRİŞİM SERMAY
+PRKAB|TÜRK PRYSMİAN KABLO
+PRKME|PARK ELEKTRİK ÜRETİM
+PRZMA|PRİZMA PRES MATBAACI
+PSDTC|PERGAMON STATUS DIŞ T
+PSGYO|PASİFİK GAYRİMENKUL YA
+QNBFK|QNB Finansal Kiralama A.S
+QNBTR|QNB Bank AS
+QUAGR|QUA GRANITE HAYAL YAP
+QUICK|Quick Sigorta AS
+RALYH|RAL YATIRIM HOLDİNG A.Ş
+RAYSG|RAY SİGORTA A.Ş
+REEDR|Reeder Teknoloji Sanayi ve
+RGYAS|RÖNESANS GAYRİMENKU
+RNPOL|RAİNBOW POLİKARBONA
+RODRG|RODRİGO TEKSTİL SANA
+RTALB|RTA LABORATUVARLARI
+RUBNS|RUBENİS TEKSTİL SANAYİ
+RUZYE|Ruzy Madencilik Ve Enerji Y
+RYGYO|REYSAŞ GAYRİMENKUL Y
+RYSAS|REYSAŞ TAŞIMACILIK VE L
+SAFKR|SAFKAR EGE SOĞUTMAC
+SAHOL|HACI ÖMER SABANCI HO
+SAMAT|SARAY MATBAACILIK KA
+SANEL|SAN-EL MÜHENDİSLİK EL
+SANFM|SANİFOAM ENDÜSTRİ VE
+SANKO|SANKO PAZARLAMA İTH
+SARAE|SA-RA Enerji Insaat Ticaret
+SARKY|SARKUYSAN ELEKTROLİT
+SASA|SASA POLYESTER SANAYİ
+SAYAS|SAY YENİLENEBİLİR ENER
+SDTTR|SDT UZAY VE SAVUNMA T
+SEGMN|Segmen Kardesler Gida Ur
+SEGYO|ŞEKER GAYRİMENKUL YA
+SEKFK|ŞEKER FİNANSAL KİRALA
+SEKUR|SEKURO PLASTİK AMBAL
+SELEC|SELÇUK ECZA DEPOSU Tİ
+SELVA|SELVA GIDA SANAYİ A.Ş
+SERNT|Seranit Granit Seramik San
+SEYKM|SEYİTLER KİMYA SANAYİ
+SILVR|SİLVERLİNE ENDÜSTRİ VE
+SISE|TÜRKİYE ŞİŞE VE CAM FA
+SKBNK|ŞEKERBANK T.A.Ş
+SKTAS|SÖKTAŞ TEKSTİL SANAYİ
+SKYLP|Skyalp Finansal Teknolojiler
+SKYMD|Seker Yatirim Menkul Dege
+SMART|SMARTİKS YAZILIM A.Ş
+SMRTG|SMART GÜNEŞ ENERJİSİ
+SMRVA|Sumer Varlik Yonetim A.S
+SNGYO|SİNPAŞ GAYRİMENKUL YA
+SNICA|SANİCA ISI SANAYİ A.Ş
+SNPAM|SÖNMEZ PAMUKLU SANA
+SODSN|SODAŞ SODYUM SANAYİİ
+SOHOE|Soho Giyim ve Enerji A.S
+SOKE|SÖKE DEĞİRMENCİLİK SA
+SOKM|ŞOK MARKETLER TİCARE
+SONME|SÖNMEZ FİLAMENT SEN
+SRVGY|SERVET GAYRİMENKUL Y
+SSAAT|Saat ve Saat Sanayi ve Tic
+SUMAS|SUMAŞ SUNİ TAHTA VE M
+SUNTK|SUN TEKSTİL SANAYİ VE
+SURGY|Sur Tatil Evleri Gayrimenkul
+SUWEN|SUWEN TEKSTİL SANAYİ
+SVGYO|Savur Gayrimenkul Yatirim
+TABGD|TAB Gida Sanayi ve Ticaret
+TARKM|Tarkim Bitki Koruma Sanay
+TATEN|Tatlipinar Enerji Uretim A.S
+TATGD|TAT GIDA SANAYİ A.Ş
+TAVHL|TAV HAVALİMANLARI HOL
+TBORG|TÜRK TUBORG BİRA VE M
+TCELL|TURKCELL İLETİŞİM HİZM
+TCKRC|Kirac Galvaniz Telekominik
+TDGYO|TREND GAYRİMENKUL YA
+TEHOL|Tera Yatirim Teknoloji Holdi
+TEKTU|TEK-ART İNŞAAT TİCARET
+TERA|TERA YATIRIM MENKUL D
+TEZOL|EUROPAP TEZOL KAĞIT S
+TGSAS|TGS DIŞ TİCARET A.Ş
+THYAO|TÜRK HAVA YOLLARI A.O
+TKFEN|TEKFEN HOLDİNG A.Ş
+TKNKA|Teknika Plast Teknik Kalip
+TKNSA|TEKNOSA İÇ VE DIŞ TİCA
+TLMAN|TRABZON LİMAN İŞLETM
+TMPOL|TEMAPOL POLİMER PLAS
+TMSN|TÜMOSAN MOTOR VE TR
+TNZTP|TAPDİ OKSİJEN ÖZEL SAĞ
+TOASO|TOFAŞ TÜRK OTOMOBİL F
+TRALT|Turk Altin Isletmeleri A.S
+TRCAS|TURCAS PETROL A.Ş
+TRENJ|TR Dogal Enerji Kaynaklari
+TRGYO|TORUNLAR GAYRİMENKU
+TRHOL|Tera Financial Investments
+TRILC|TURK İLAÇ VE SERUM SA
+TRMET|TR Anadolu Metal Madenc
+TSGYO|TSKB GAYRİMENKUL YATI
+TSKB|TÜRKİYE SINAİ KALKINMA
+TSPOR|TRABZONSPOR SPORTİF
+TTKOM|TÜRK TELEKOMÜNİKASY
+TTRAK|TÜRK TRAKTÖR VE ZİRAA
+TUCLK|TUĞÇELİK ALÜMİNYUM V
+TUKAS|TUKAŞ GIDA SANAYİ VE Tİ
+TUPRS|TÜPRAŞ-TÜRKİYE PETRO
+TUREX|TUREKS TURİZM TAŞIMA
+TURGG|TÜRKER PROJE GAYRİME
+TURSG|TÜRKİYE SİGORTA A.Ş
+UCAYM|Ucay Muhendislik Enerji ve
+UFUK|UFUK YATIRIM YÖNETİM V
+ULAS|ULAŞLAR TURİZM YATIRI
+ULKER|ÜLKER BİSKÜVİ SANAYİ A
+ULUFA|ULUSAL FAKTORİNG A.Ş
+ULUSE|ULUSOY ELEKTRİK İMALA
+ULUUN|ULUSOY UN SANAYİ VE Tİ
+UNLU|ÜNLÜ YATIRIM HOLDİNG A
+USAK|UŞAK SERAMİK SANAYİ A.Ş
+USHOL|US Yatirim Holding A.S
+VAKBN|TÜRKİYE VAKIFLAR BANK
+VAKFA|VAKIF FAKTORİNG A.Ş
+VAKFN|VAKIF FİNANSAL KİRALA
+VAKKO|VAKKO TEKSTİL VE HAZIR
+VANGD|VANET GIDA SANAYİ İÇ V
+VBTYZ|VBT YAZILIM A.Ş
+VERUS|VERUSA HOLDİNG A.Ş
+VESBE|VESTEL BEYAZ EŞYA SAN
+VESTL|VESTEL ELEKTRONİK SAN
+VEYAS|Turker Vangolu Enerji Yatiri
+VKFYO|VAKIF MENKUL KIYMET Y
+VKGYO|VAKIF GAYRİMENKUL YATI
+VKING|VİKİNG KAĞIT VE SELÜLO
+VRGYO|Vera Konsept Gayrimenkul
+VSNMD|Visne Madencilik Uretim S
+YAPRK|YAPRAK SÜT VE BESİ ÇİF
+YATAS|YATAŞ YATAK VE YORGAN
+YAYLA|YAYLA ENERJİ ÜRETİM TU
+YBTAS|YİBİTAŞ YOZGAT İŞÇİ BİRL
+YEOTK|YEO TEKNOLOJİ ENERJİ V
+YESIL|YEŞİL YATIRIM HOLDİNG A
+YGGYO|YENİ GİMAT GAYRİMENKU
+YIGIT|Yigit Aku Malzemeleri Nakli
+YKBNK|YAPI VE KREDİ BANKASI
+YKSLN|YÜKSELEN ÇELİK A.Ş
+YONGA|YONGA MOBİLYA SANAYİ
+YUNSA|YÜNSA YÜNLÜ SANAYİ VE
+YYAPI|YEŞİL YAPI ENDÜSTRİSİ A.Ş
+YYLGD|YAYLA AGRO GIDA SANAY
+ZEDUR|ZEDUR ENERJİ ELEKTRİK
+ZERGY|Zeray Gayrimenkul Yatirim
+ZGYO|Z Gayrimenkul Yatirim Orta
+ZOREN|ZORLU ENERJİ ELEKTRİK
+ZRGYO|ZİRAAT GAYRİMENKUL YA
+"""
+BIST_ALLE_AKTIEN: dict[str, str] = {
+    zeile.split("|", 1)[0].strip(): zeile.split("|", 1)[1].strip()
+    for zeile in _BIST_AKTIEN_ROH.strip().splitlines() if "|" in zeile
+}
+
 BIST_INDIZES: dict[str, str] = {
     "XU100": "BIST 100",
     "XU030": "BIST 30",
@@ -605,6 +1234,51 @@ def _yahoo_laden(symbol: str, start: pd.Timestamp, ende: pd.Timestamp, intervall
     return _index_bereinigen(df[spalten], intraday), meta
 
 
+def yahoo_mehrere_laden(basis_liste: Sequence[str], start: pd.Timestamp, ende: pd.Timestamp,
+                        dividendenbereinigt: bool = True, paketgroesse: int = 80) -> dict[str, pd.DataFrame]:
+    """Lädt Tageskurse vieler BIST-Aktien gebündelt über yf.download (deutlich schneller als Einzelabrufe).
+
+    Rückgabe: {Basiskürzel: OHLCV-DataFrame}; Werte ohne Daten fehlen im Ergebnis.
+    """
+    try:
+        import logging
+
+        import yfinance as yf
+    except ImportError as exc:
+        raise DatenFehler("Das Paket „yfinance“ ist nicht installiert.", art="abhaengigkeit") from exc
+    logging.getLogger("yfinance").setLevel(logging.CRITICAL)
+    ergebnis: dict[str, pd.DataFrame] = {}
+    liste = list(dict.fromkeys(basis_liste))
+    fehler: Exception | None = None
+    for i in range(0, len(liste), paketgroesse):
+        teil = liste[i:i + paketgroesse]
+        symbole = [f"{b}{STANDARD_SUFFIX}" for b in teil]
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                df = yf.download(symbole, start=start.strftime("%Y-%m-%d"), end=ende.strftime("%Y-%m-%d"),
+                                 interval="1d", auto_adjust=dividendenbereinigt, group_by="ticker",
+                                 threads=True, progress=False)
+        except Exception as exc:   # ein Paket darf nicht alles abbrechen
+            fehler = exc
+            continue
+        if df is None or df.empty:
+            continue
+        for basis, symbol in zip(teil, symbole, strict=True):
+            if isinstance(df.columns, pd.MultiIndex):
+                if symbol not in df.columns.get_level_values(0):
+                    continue
+                einzeln = df[symbol]
+            else:          # nur ein Symbol angefragt
+                einzeln = df
+            einzeln = einzeln[[s for s in OHLCV if s in einzeln.columns]].dropna(how="all")
+            if not einzeln.empty and einzeln["Close"].notna().sum() > 0:
+                ergebnis[basis] = _index_bereinigen(einzeln, intraday=False)
+    if not ergebnis and fehler is not None:
+        raise _fehler_uebersetzen(fehler, "BIST-Aktien", "Yahoo Finance")
+    return ergebnis
+
+
 def _borsapy_laden(symbol: str, start: pd.Timestamp, ende: pd.Timestamp, intervall_code: str,
                    eingabe: str = "") -> tuple[pd.DataFrame, dict[str, Any]]:
     """Lädt Kursdaten über das optionale Paket borsapy (TradingView-Daten, ca. 15 Min. verzögert)."""
@@ -901,7 +1575,7 @@ def daten_laden(
 
     ist_index = tinfo.ist_index or str(meta.get("instrumentType", "")).upper() == "INDEX"
     name = str(meta.get("longName") or meta.get("shortName") or BIST_FAVORITEN.get(tinfo.basis)
-               or BIST_INDIZES.get(tinfo.basis) or tinfo.basis)
+               or BIST_INDIZES.get(tinfo.basis) or BIST_ALLE_AKTIEN.get(tinfo.basis) or tinfo.basis)
     if quelle == QUELLE_DEMO:
         name = f"DEMO – {name}"
     return DatenPaket(daten=daten, ticker=tinfo, symbol=symbol, quelle=quelle, intervall=intervall,
@@ -2877,8 +3551,9 @@ def _startwerte_setzen() -> None:
 
 
 def _schnellauswahl_optionen() -> list[str]:
+    weitere = [f"{k} – {v}" for k, v in BIST_ALLE_AKTIEN.items() if k not in BIST_FAVORITEN]
     return (["– eigene Eingabe –"] + [f"{k} – {v}" for k, v in BIST_FAVORITEN.items()]
-            + [f"{k} – {v} (Index)" for k, v in BIST_INDIZES.items()])
+            + [f"{k} – {v} (Index)" for k, v in BIST_INDIZES.items()] + weitere)
 
 
 def _schnellauswahl_uebernehmen() -> None:
@@ -2918,7 +3593,9 @@ def _seitenleiste() -> dict[str, Any]:
                                       "Zahlen- und Datumsformat werden automatisch erkannt.")
         csv_inhalt = datei.getvalue() if datei is not None else None
     sb.selectbox("Schnellauswahl", _schnellauswahl_optionen(), key="schnellauswahl",
-                 on_change=_schnellauswahl_uebernehmen)
+                 on_change=_schnellauswahl_uebernehmen,
+                 help=f"Große Werte und Indizes zuerst, danach alle {len(BIST_ALLE_AKTIEN)} BIST-Aktien. "
+                      "Zum Suchen einfach tippen.")
     sb.text_input("Ticker (Börsenkürzel)", key="ticker", placeholder="z. B. THYAO", on_change=_ticker_geaendert,
                   help="Beispiele: THYAO, GARAN, ASELS oder XU100 (BIST 100). Formate wie THYAO.IS, BIST:THYAO, "
                        "THYAO.E oder ŞİŞE werden automatisch umgewandelt. Bei CSV/Demo dient der Ticker als Name.")
@@ -3769,7 +4446,8 @@ def aktie_bewerten(ticker: str, daten: pd.DataFrame, bp: BudgetParameter, sp: St
     """
     sp = sp or StrategieParameter()
     jetzt = jetzt if jetzt is not None else _jetzt_istanbul()
-    b = AktienBewertung(ticker=ticker, symbol=symbol or ticker, name=name or BIST_FAVORITEN.get(ticker, ticker))
+    b = AktienBewertung(ticker=ticker, symbol=symbol or ticker,
+                        name=name or BIST_FAVORITEN.get(ticker) or BIST_ALLE_AKTIEN.get(ticker, ticker))
     info = INTERVALLE["Täglich"]
     bereinigt, qualitaet = daten_validieren(daten, info, jetzt=jetzt, live=live)
     if len(bereinigt) < 220:
@@ -3786,6 +4464,17 @@ def aktie_bewerten(ticker: str, daten: pd.DataFrame, bp: BudgetParameter, sp: St
     juengste_spruenge = qualitaet.kurs_spruenge
     if not juengste_spruenge.empty and (juengste_spruenge["Datum"] >= bereinigt.index[-60]).any():
         b.ausschlussgrund = "Unplausibler Kurssprung in den letzten 60 Tagen (mögliche Kapitalmaßnahme/Datenfehler)."
+        return b
+
+    # Schnelle Vorprüfung (vor der aufwendigen Indikatorberechnung): Liquidität und Volatilität
+    liquiditaet = float((bereinigt["Close"] * bereinigt["Volume"]).tail(20).mean())
+    if _ist_zahl(liquiditaet) and liquiditaet < bp.min_liquiditaet_tl / 5:
+        b.ausschlussgrund = f"Sehr geringe Liquidität (Ø Umsatz {fmt_volumen(liquiditaet)} TL/Tag)."
+        return b
+    vola_vorab = float(np.log(bereinigt["Close"]).diff().tail(20).std() * math.sqrt(HANDELSTAGE_PRO_JAHR) * 100)
+    if _ist_zahl(vola_vorab) and vola_vorab > bp.max_vola_pct:
+        b.ausschlussgrund = (f"Volatilität {fmt_zahl(vola_vorab, 0)} % p. a. über der Grenze des Risikoprofils "
+                             f"({fmt_zahl(bp.max_vola_pct, 0)} %).")
         return b
 
     d = indikatoren_berechnen(bereinigt)
@@ -4058,8 +4747,18 @@ def _budget_seitenleiste() -> dict[str, Any]:
     horizont = sb.radio("Anlagehorizont", list(HORIZONTE), index=1, horizontal=True, key="budget_horizont",
                         help="kurzfristig ≈ 1 Monat, mittelfristig ≈ 3 Monate, langfristig ≈ 1 Jahr. "
                              "Beeinflusst Gewichtung, ATR-Stop und Chance-Risiko-Verhältnis.")
-    liste = sb.text_area("Analysierte Aktien (Kürzel, durch Komma getrennt)", ", ".join(STANDARD_AKTIENLISTE),
-                         key="budget_liste", height=120)
+    universen = [f"{len(STANDARD_AKTIENLISTE)} große BIST-Werte", f"Alle BIST-Aktien ({len(BIST_ALLE_AKTIEN)})",
+                 "Eigene Liste"]
+    universum = sb.radio("Analysierte Aktien", universen, key="budget_universum",
+                         help="„Alle BIST-Aktien“ prüft den gesamten Markt (dauert beim ersten Mal 1–3 Minuten, "
+                              "danach 15 Minuten zwischengespeichert).")
+    if universum == universen[0]:
+        liste = ", ".join(STANDARD_AKTIENLISTE)
+    elif universum == universen[1]:
+        liste = ", ".join(BIST_ALLE_AKTIEN)
+    else:
+        liste = sb.text_area("Eigene Liste (Kürzel, durch Komma getrennt)", ", ".join(STANDARD_AKTIENLISTE),
+                             key="budget_liste", height=120)
     p, h = RISIKOPROFILE[profil], HORIZONTE[horizont]
     schluessel = f"{profil}_{horizont}"   # neue Standardwerte bei Profil-/Horizontwechsel
     with sb.expander("Risiko & Positionsgrößen"):
@@ -4101,6 +4800,47 @@ def _budget_seitenleiste() -> dict[str, Any]:
     return {"quelle": quelle, "bp": bp, "ticker": list(dict.fromkeys(ticker))}
 
 
+def screening_durchfuehren(ticker_liste: Sequence[str], quelle: str, bp: BudgetParameter,
+                           jetzt: pd.Timestamp | None = None, fortschritt: Any = None) -> list[AktienBewertung]:
+    """Lädt Kurse (bei Yahoo gebündelt) und bewertet alle Aktien der Liste."""
+    jetzt = jetzt if jetzt is not None else _jetzt_istanbul()
+    live = quelle in LIVE_QUELLEN
+    info = INTERVALLE["Täglich"]
+    start = (jetzt - pd.Timedelta(days=ZEITRAEUME["1 Jahr"] + info.vorlauf_tage)).normalize()
+    ende = jetzt.normalize() + pd.Timedelta(days=1)
+    vorrat: dict[str, pd.DataFrame] = {}
+    if quelle == QUELLE_YAHOO:
+        basis_liste = []
+        for eingabe in ticker_liste:
+            with suppress(DatenFehler):
+                basis_liste.append(ticker_normalisieren(eingabe).basis)
+        vorrat = yahoo_mehrere_laden(basis_liste, start, ende)
+
+    def laden(basis: str) -> DatenPaket:
+        if quelle == QUELLE_YAHOO:
+            if basis not in vorrat:
+                raise DatenFehler(f"Keine Kursdaten bei Yahoo Finance für {basis}{STANDARD_SUFFIX}.",
+                                  art="keine_daten")
+            return DatenPaket(daten=vorrat[basis], ticker=ticker_normalisieren(basis),
+                              symbol=f"{basis}{STANDARD_SUFFIX}", quelle=quelle, intervall="Täglich",
+                              zeitraum="1 Jahr", anzeige_start=start, waehrung="TRY",
+                              name=BIST_FAVORITEN.get(basis) or BIST_ALLE_AKTIEN.get(basis, basis),
+                              ist_index=basis in BIST_INDIZES)
+        return daten_laden(basis, "1 Jahr", "Täglich", quelle, jetzt=jetzt)
+
+    return aktien_screenen(ticker_liste, laden, bp, StrategieParameter(), live=live, jetzt=jetzt,
+                           fortschritt=fortschritt)
+
+
+@_cache_data(ttl=900)
+def _screening_gecacht(ticker: tuple[str, ...], quelle: str, horizont: str, max_vola: float, min_liq: float,
+                       atr_mult: float, crv: float, stunde: str) -> list[AktienBewertung]:
+    """Zwischengespeicherte Bewertung (unabhängig von Budget und Aufteilungsparametern)."""
+    bp = BudgetParameter.aus_profil(1.0, "mittel", horizont, max_vola_pct=max_vola, min_liquiditaet_tl=min_liq,
+                                    atr_multiplikator=atr_mult, crv=crv)
+    return screening_durchfuehren(list(ticker), quelle, bp)
+
+
 def _bewertungstabelle(bewertungen: Sequence[AktienBewertung]) -> pd.DataFrame:
     zeilen = []
     for rang, b in enumerate([x for x in bewertungen if x.ok], start=1):
@@ -4131,16 +4871,11 @@ def budget_ansicht_starten() -> None:
         st.stop()
 
     quelle = e["quelle"]
-    live = quelle in LIVE_QUELLEN
     jetzt = _jetzt_istanbul()
-    balken = st.progress(0.0, text="Lade und bewerte Aktien …")
-
-    def laden(basis: str) -> DatenPaket:
-        return _daten_laden_gecacht(basis, "1 Jahr", "Täglich", quelle, STANDARD_SUFFIX, False, True, None)
-
-    bewertungen = aktien_screenen(e["ticker"], laden, bp, StrategieParameter(), live=live, jetzt=jetzt,
-                                  fortschritt=lambda anteil, t: balken.progress(anteil, text=f"Analysiere {t} …"))
-    balken.empty()
+    with st.spinner(f"Lade und bewerte {len(e['ticker'])} Aktien … (bei allen Aktien 1–3 Minuten)"):
+        bewertungen = _screening_gecacht(tuple(e["ticker"]), quelle, bp.horizont, bp.max_vola_pct,
+                                         bp.min_liquiditaet_tl, bp.atr_multiplikator, bp.crv,
+                                         jetzt.strftime("%Y-%m-%d %H"))
     gueltig = [b for b in bewertungen if b.ok]
     ausgeschlossen = [b for b in bewertungen if not b.ok]
     portfolio = portfolio_aufteilen(bewertungen, bp)
@@ -4201,24 +4936,41 @@ def budget_ansicht_starten() -> None:
                  .map(_farbe_fuer_zahl, subset=["Veränderung"])
                  .format({"Kurs": lambda v: fmt_tl(v), "Veränderung": lambda v: fmt_pct(v)}),
                  hide_index=True, height=_tabellenhoehe(min(len(tabelle), 20)))
+    if len(tabelle) > 20:
+        st.caption(f"{len(tabelle)} bewertete Aktien – in der Tabelle scrollen. Sortierung nach Score.")
     neu = [b for b in gueltig if b.neu]
     fortgesetzt = [b for b in gueltig if not b.neu and b.signal != SCREEN_BEOBACHTEN]
+
+    def gekuerzt(zeilen: list[str], anzahl: int = 25) -> str:
+        if not zeilen:
+            return "– keine –"
+        rest = f"\n- … und {len(zeilen) - anzahl} weitere" if len(zeilen) > anzahl else ""
+        return "\n".join(zeilen[:anzahl]) + rest
+
     x, y, z = st.columns(3)
     with x:
         st.markdown("**Neues Signal heute**")
-        st.markdown("\n".join(f"- {b.ticker}: {b.signal} (vorher: {b.signal_vortag})" for b in neu) or "– keine –")
+        st.markdown(gekuerzt([f"- {b.ticker}: {b.signal} (vorher: {b.signal_vortag})" for b in neu]))
     with y:
         st.markdown("**Bestehendes Signal fortgesetzt**")
-        st.markdown("\n".join(f"- {b.ticker}: {b.signal}" for b in fortgesetzt) or "– keine –")
+        st.markdown(gekuerzt([f"- {b.ticker}: {b.signal}" for b in fortgesetzt]))
     with z:
         st.markdown("**Nicht berücksichtigen (Volatilität, Daten)**")
-        st.markdown("\n".join(f"- {b.ticker}: {b.ausschlussgrund}" for b in ausgeschlossen) or "– keine –")
+        st.markdown(gekuerzt([f"- {b.ticker}: {b.ausschlussgrund}" for b in ausgeschlossen], 15)
+                    + ("\n\nVollständige Liste unter „Transparenz“." if len(ausgeschlossen) > 15 else ""))
 
     # ---------------------------------------------------------------- 3) Aktuelle Signale je Aktie
     st.subheader("Aktuelle Signale je Aktie")
     st.caption(f"Signalstufen nach Score in % der erreichbaren Punkte: ≥ 50 % {SCREEN_STARK_KAUF}, ≥ 25 % "
                f"{SCREEN_KAUF}, ≤ −25 % {SCREEN_VERKAUF}, ≤ −50 % {SCREEN_STARK_VERKAUF}, sonst {SCREEN_BEOBACHTEN}.")
-    for b in gueltig:
+    auswahl_details = gueltig[:25]
+    if len(gueltig) > 25:
+        weitere = st.multiselect("Weitere Aktien im Detail anzeigen", [b.ticker for b in gueltig[25:]],
+                                 key="budget_details",
+                                 help="Die 25 bestbewerteten Aktien werden immer angezeigt.")
+        auswahl_details += [b for b in gueltig[25:] if b.ticker in weitere]
+        st.caption(f"Angezeigt: die 25 bestbewerteten von {len(gueltig)} Aktien (weitere oben auswählbar).")
+    for b in auswahl_details:
         titel = (f"{b.ticker} · {b.name} — {b.signal} · Score {fmt_zahl(b.punkte, 1, True)} Pkt. "
                  f"({fmt_pct(b.score_pct, 0)}) · {fmt_tl(b.kurs)} ({fmt_pct(b.veraenderung_pct)})")
         with st.expander(titel):
