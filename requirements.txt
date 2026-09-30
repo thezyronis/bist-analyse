@@ -1,0 +1,16 @@
+# BIST Technische Analyse – Abhängigkeiten (Python 3.11 oder neuer)
+# Installation:  pip install -r requirements.txt
+# Getestet mit: streamlit 1.64, pandas 3.0, numpy 2.4, plotly 7.1, yfinance 1.7
+
+streamlit>=1.50
+pandas>=2.1
+numpy>=1.26
+plotly>=5.22
+yfinance>=1.0
+
+# Optional: alternative BIST-Datenquelle (TradingView-Daten, ca. 15 Min. verzögert).
+# Wird nur geladen, wenn in der App „borsapy / TradingView“ gewählt ist.
+# borsapy>=0.10
+
+# Optional: Tests ausführen (pytest -q)
+# pytest>=8
