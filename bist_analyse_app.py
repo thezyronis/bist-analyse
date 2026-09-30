@@ -37,11 +37,11 @@ import sys
 import unicodedata
 import warnings
 import zlib
+from collections.abc import Sequence
 from contextlib import closing, suppress
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
@@ -3435,6 +3435,13 @@ def streamlit_app_starten() -> None:
     st.set_page_config(page_title=APP_NAME, page_icon="📈", layout="wide", initial_sidebar_state="expanded")
     st.markdown(_CSS, unsafe_allow_html=True)
     _startwerte_setzen()
+    if "ansicht" not in st.session_state:
+        st.session_state["ansicht"] = (ANSICHT_BUDGET if str(st.query_params.get("ansicht", "")).lower() == "budget"
+                                       else ANSICHT_EINZEL)
+    ansicht = st.sidebar.radio("Ansicht", [ANSICHT_EINZEL, ANSICHT_BUDGET], key="ansicht")
+    if ansicht == ANSICHT_BUDGET:
+        budget_ansicht_starten()
+        return
     e = _seitenleiste()
 
     st.title(APP_NAME)
@@ -3530,6 +3537,783 @@ def streamlit_app_starten() -> None:
 
     st.divider()
     st.caption(f"{HAFTUNGSAUSSCHLUSS} Kursdaten können verzögert, unvollständig oder fehlerhaft sein.")
+
+
+# =============================================================================
+# 14b) Budgetplanung und Aktienauswahl (regelbasierte Beispielanalyse)
+# =============================================================================
+
+BUDGET_WARNHINWEIS = (
+    "Diese Analyse dient ausschließlich zu Informations- und Bildungszwecken und stellt keine Anlageberatung, "
+    "Kaufempfehlung oder Finanzberatung dar. Technische Signale können falsch sein. Investiere nur Geld, dessen "
+    "Verlust du dir leisten kannst. Vor einer tatsächlichen Investition müssen aktuelle Marktdaten, "
+    "Unternehmensinformationen, Gebühren, Steuern und persönliche Risikobereitschaft geprüft werden."
+)
+BUDGET_TITEL = "Regelbasierte Beispielanalyse – keine persönliche Anlageempfehlung."
+TOP_FORMULIERUNG = "Nach den ausgewählten technischen Kriterien aktuell das stärkste positive Signal."
+
+# Signalstufen der Aktienauswahl (bewusst neutrale Formulierungen)
+SCREEN_STARK_KAUF = "Starkes Kaufsignal"
+SCREEN_KAUF = "Kaufsignal"
+SCREEN_BEOBACHTEN = "Beobachten"
+SCREEN_VERKAUF = "Verkaufssignal"
+SCREEN_STARK_VERKAUF = "Starkes Verkaufssignal"
+SCREEN_STIL = {SCREEN_STARK_KAUF: "stark_pos", SCREEN_KAUF: "pos", SCREEN_BEOBACHTEN: "neutral",
+               SCREEN_VERKAUF: "neg", SCREEN_STARK_VERKAUF: "stark_neg"}
+SIGNAL_STIL.update(SCREEN_STIL)   # Farben auch in Tabellen verwenden
+
+# Standardliste für die Auswahl (Aktien, keine Indizes) – in der Oberfläche änderbar
+STANDARD_AKTIENLISTE = ["THYAO", "GARAN", "AKBNK", "ISCTR", "YKBNK", "ASELS", "BIMAS", "KCHOL", "SAHOL",
+                        "EREGL", "TUPRS", "SISE", "FROTO", "TOASO", "PGSUS", "TCELL", "ENKAI", "ARCLK",
+                        "MGROS", "TAVHL"]
+
+RISIKOPROFILE: dict[str, dict[str, float]] = {
+    # max_pos/min_anteil/max_anteil/reserve in %, Verluste in % des Budgets, max_vola = Volatilität p. a. in %
+    "konservativ": {"max_positionen": 4, "min_anteil": 10.0, "max_anteil": 30.0, "reserve": 30.0,
+                    "verlust_position": 0.5, "verlust_portfolio": 3.0, "max_vola": 50.0},
+    "mittel": {"max_positionen": 6, "min_anteil": 8.0, "max_anteil": 25.0, "reserve": 15.0,
+               "verlust_position": 1.0, "verlust_portfolio": 6.0, "max_vola": 65.0},
+    "hoch": {"max_positionen": 8, "min_anteil": 5.0, "max_anteil": 30.0, "reserve": 5.0,
+             "verlust_position": 2.0, "verlust_portfolio": 12.0, "max_vola": 90.0},
+}
+RISIKO_LABEL = {"konservativ": "konservatives Risiko", "mittel": "mittleres Risiko", "hoch": "hohes Risiko"}
+
+HORIZONTE: dict[str, dict[str, Any]] = {
+    # Gewichte der Bewertungskomponenten je Anlagehorizont (transparent und änderbar)
+    "kurzfristig": {"tage": 20, "atr_multiplikator": 1.5, "crv": 1.5,
+                    "gewichte": {"basis": 1.0, "trend": 1.0, "ema": 2.0, "sma50": 1.0, "sma_lang": 0.5,
+                                 "obv": 1.0, "vola": 1.0}},
+    "mittelfristig": {"tage": 60, "atr_multiplikator": 2.0, "crv": 2.0,
+                      "gewichte": {"basis": 1.0, "trend": 1.5, "ema": 1.0, "sma50": 1.0, "sma_lang": 1.0,
+                                   "obv": 1.0, "vola": 1.0}},
+    "langfristig": {"tage": 250, "atr_multiplikator": 3.0, "crv": 2.5,
+                    "gewichte": {"basis": 1.0, "trend": 2.0, "ema": 0.5, "sma50": 0.5, "sma_lang": 2.0,
+                                 "obv": 0.5, "vola": 1.5}},
+}
+KOMPONENTEN_NAMEN = {
+    "basis": "Punktesystem (RSI, MACD, Golden Cross, SMA 200, Volumen, ADX)",
+    "trend": "Trendstärke (Trend + ADX)", "ema": "EMA 12 vs. EMA 26", "sma50": "Kurs vs. SMA 50",
+    "sma_lang": "SMA 50 vs. SMA 200", "obv": "Volumenfluss (OBV vs. Ø 20)", "vola": "Volatilität",
+    "zonen": "Unterstützung/Widerstand", "stop": "Abstand zum Stop-Loss", "liquiditaet": "Liquidität",
+}
+
+
+@dataclass
+class BudgetParameter:
+    """Einstellungen der Budgetplanung (Standardwerte aus Risikoprofil und Anlagehorizont)."""
+
+    budget: float = 100_000.0
+    risikoprofil: str = "mittel"
+    horizont: str = "mittelfristig"
+    max_positionen: int = 6
+    min_anteil_pct: float = 8.0
+    max_anteil_pct: float = 25.0
+    reserve_pct: float = 15.0
+    reserve_min_tl: float = 0.0
+    verlust_position_pct: float = 1.0
+    verlust_portfolio_pct: float = 6.0
+    atr_multiplikator: float = 2.0
+    crv: float = 2.0
+    gebuehren_pct: float = 0.10
+    slippage_pct: float = 0.05
+    steuer_pct: float = 0.0
+    max_vola_pct: float = 65.0
+    min_liquiditaet_tl: float = 20_000_000.0
+
+    @classmethod
+    def aus_profil(cls, budget: float, risikoprofil: str = "mittel", horizont: str = "mittelfristig",
+                   **abweichungen: Any) -> BudgetParameter:
+        p, h = RISIKOPROFILE[risikoprofil], HORIZONTE[horizont]
+        werte: dict[str, Any] = dict(
+            budget=budget, risikoprofil=risikoprofil, horizont=horizont, max_positionen=int(p["max_positionen"]),
+            min_anteil_pct=p["min_anteil"], max_anteil_pct=p["max_anteil"], reserve_pct=p["reserve"],
+            verlust_position_pct=p["verlust_position"], verlust_portfolio_pct=p["verlust_portfolio"],
+            atr_multiplikator=h["atr_multiplikator"], crv=h["crv"], max_vola_pct=p["max_vola"])
+        werte.update(abweichungen)
+        return cls(**werte)
+
+    def pruefen(self) -> list[str]:
+        fehler = []
+        if not (_ist_zahl(self.budget) and self.budget > 0):
+            fehler.append("Bitte einen positiven Betrag in TL eingeben.")
+        if not (0 < self.min_anteil_pct <= self.max_anteil_pct <= 50):
+            fehler.append("Anteile je Aktie: 0 < Mindestanteil ≤ Höchstanteil ≤ 50 % (nie alles in eine Aktie).")
+        if not (0 <= self.reserve_pct < 100):
+            fehler.append("Die Liquiditätsreserve muss zwischen 0 und 100 % liegen.")
+        if self.verlust_position_pct <= 0 or self.verlust_portfolio_pct <= 0:
+            fehler.append("Die Verlustgrenzen müssen größer als 0 sein.")
+        if self.max_positionen < 2:
+            fehler.append("Mindestens zwei Positionen, damit nicht alles in eine Aktie fließt.")
+        return fehler
+
+
+def fmt_tl(betrag: Any, nachkomma: int = 2) -> str:
+    """Betrag in türkischer Lira, z. B. 100.000,00 ₺."""
+    return "–" if not _ist_zahl(betrag) else f"{fmt_zahl(betrag, nachkomma)} ₺"
+
+
+def markt_status(jetzt: pd.Timestamp | None = None) -> dict[str, Any]:
+    """Öffnungsstatus der Borsa İstanbul nach Uhrzeit (Feiertage werden nicht berücksichtigt)."""
+    jetzt = jetzt if jetzt is not None else _jetzt_istanbul()
+    minuten = jetzt.hour * 60 + jetzt.minute
+    if jetzt.weekday() >= 5:
+        text, offen = "geschlossen (Wochenende)", False
+    elif 9 * 60 + 40 <= minuten < 10 * 60:
+        text, offen = "Eröffnungsauktion (09:40–10:00 Uhr)", True
+    elif 10 * 60 <= minuten < 18 * 60:
+        text, offen = "geöffnet – fortlaufender Handel (10:00–18:00 Uhr)", True
+    elif 18 * 60 <= minuten < BIST_SITZUNGSENDE_MIN:
+        text, offen = "Schlussauktion (18:00–18:10 Uhr)", True
+    else:
+        text, offen = "geschlossen (außerhalb der Handelszeit)", False
+    return {"offen": offen, "text": text, "zeit": jetzt,
+            "hinweis": "Nach Uhrzeit Istanbul bestimmt; Feiertage und Handelsunterbrechungen sind nicht berücksichtigt."}
+
+
+def erwarteter_handelstag(jetzt: pd.Timestamp | None = None) -> pd.Timestamp:
+    """Letzter Handelstag, für den Tageskurse vorliegen sollten (ohne Feiertagskalender)."""
+    jetzt = jetzt if jetzt is not None else _jetzt_istanbul()
+    tag = jetzt.normalize()
+    if jetzt.weekday() < 5 and jetzt.hour * 60 + jetzt.minute >= 10 * 60:
+        return tag
+    tag -= pd.Timedelta(days=1)
+    while tag.weekday() >= 5:
+        tag -= pd.Timedelta(days=1)
+    return tag
+
+
+@dataclass
+class AktienBewertung:
+    """Bewertung einer Aktie für die Auswahl (alle Werte zum letzten verfügbaren Kurs)."""
+
+    ticker: str
+    symbol: str = ""
+    name: str = ""
+    ok: bool = False
+    ausschlussgrund: str | None = None
+    kurs: float = float("nan")
+    veraenderung_pct: float = float("nan")
+    datum: pd.Timestamp | None = None
+    aktuell: bool = False
+    vorlaeufig: bool = False
+    punkte: float = 0.0
+    max_punkte: float = 1.0
+    score_pct: float = 0.0
+    signal: str = SCREEN_BEOBACHTEN
+    signal_vortag: str = SCREEN_BEOBACHTEN
+    neu: bool = False
+    komponenten: dict[str, float] = field(default_factory=dict)
+    gruende: list[str] = field(default_factory=list)
+    risiken: list[str] = field(default_factory=list)
+    unterstuetzung: Zone | None = None
+    widerstand: Zone | None = None
+    atr: float = float("nan")
+    stop: float = float("nan")
+    ziel: float = float("nan")
+    crv: float = float("nan")
+    crv_bis_widerstand: float = float("nan")
+    vola_pct: float = float("nan")
+    liquiditaet_tl: float = float("nan")
+    risiko_stufe: str = "–"
+    ereignissignal: str = HALTEN
+
+
+def _screen_signal(anteil: float) -> str:
+    if anteil >= 0.5:
+        return SCREEN_STARK_KAUF
+    if anteil >= 0.25:
+        return SCREEN_KAUF
+    if anteil <= -0.5:
+        return SCREEN_STARK_VERKAUF
+    if anteil <= -0.25:
+        return SCREEN_VERKAUF
+    return SCREEN_BEOBACHTEN
+
+
+def _komponenten_reihen(d: pd.DataFrame, sp: StrategieParameter, max_vola: float) -> dict[str, pd.Series]:
+    """Vektorisierte Bewertungskomponenten je Kerze (nur vergangene Daten)."""
+    adx_stark = d["ADX_14"] >= sp.adx_schwelle
+    trend = d["Trend"].astype(float) * np.where(adx_stark, 2.0, 1.0)
+    vola = np.log(d["Close"]).diff().rolling(20, min_periods=15).std() * math.sqrt(HANDELSTAGE_PRO_JAHR) * 100
+    vola_punkte = np.select([vola > max_vola, vola > 0.8 * max_vola], [-2.0, -1.0], 0.0)
+
+    def vorzeichen(a: pd.Series, b: pd.Series) -> pd.Series:
+        return pd.Series(np.select([a > b, a < b], [1.0, -1.0], 0.0), index=d.index)
+
+    return {
+        "basis": d["Punkte"].astype(float),
+        "trend": pd.Series(trend, index=d.index).fillna(0.0),
+        "ema": vorzeichen(d["EMA_12"], d["EMA_26"]),
+        "sma50": vorzeichen(d["Close"], d["SMA_50"]),
+        "sma_lang": vorzeichen(d["SMA_50"], d["SMA_200"]),
+        "obv": vorzeichen(d["OBV"], d["OBV_SMA_20"]),
+        "vola": pd.Series(vola_punkte, index=d.index),
+        "_vola_pct": vola,
+    }
+
+
+def _max_positive_punkte(gewichte: dict[str, float], sp: StrategieParameter) -> float:
+    """Höchste erreichbare positive Punktzahl (für die Prozentangabe)."""
+    return (gewichte["basis"] * max(sp.gewichte.maximum(), 1) + gewichte["trend"] * 2 + gewichte["ema"]
+            + gewichte["sma50"] + gewichte["sma_lang"] + gewichte["obv"] + 1.0)   # +1 für Zonen
+
+
+def aktie_bewerten(ticker: str, daten: pd.DataFrame, bp: BudgetParameter, sp: StrategieParameter | None = None,
+                   name: str = "", symbol: str = "", live: bool = True,
+                   jetzt: pd.Timestamp | None = None) -> AktienBewertung:
+    """Bewertet eine Aktie nach transparenten technischen Kriterien.
+
+    Komponenten: Punktesystem (RSI, MACD, Kreuzungen, SMA 200, Volumen, ADX), Trendstärke, EMA-/SMA-Verhältnisse,
+    Volumenfluss, Volatilität sowie – nur für die letzte Kerze – Unterstützung/Widerstand, Stop-Abstand und
+    Liquidität. Gewichte hängen vom Anlagehorizont ab (``HORIZONTE``).
+    """
+    sp = sp or StrategieParameter()
+    jetzt = jetzt if jetzt is not None else _jetzt_istanbul()
+    b = AktienBewertung(ticker=ticker, symbol=symbol or ticker, name=name or BIST_FAVORITEN.get(ticker, ticker))
+    info = INTERVALLE["Täglich"]
+    bereinigt, qualitaet = daten_validieren(daten, info, jetzt=jetzt, live=live)
+    if len(bereinigt) < 220:
+        b.ausschlussgrund = f"Zu wenige Kursdaten ({len(bereinigt)} Handelstage, mindestens 220 nötig)."
+        return b
+    b.datum = bereinigt.index[-1]
+    b.aktuell = (not live) or b.datum >= erwarteter_handelstag(jetzt)
+    if live and len(pd.bdate_range(b.datum + pd.Timedelta(days=1), jetzt.normalize())) > 5:
+        b.ausschlussgrund = f"Veraltete Daten (letzte Kerze {fmt_datum(b.datum)})."
+        return b
+    if not qualitaet.volumen_verfuegbar:
+        b.ausschlussgrund = "Keine verlässlichen Volumendaten."
+        return b
+    juengste_spruenge = qualitaet.kurs_spruenge
+    if not juengste_spruenge.empty and (juengste_spruenge["Datum"] >= bereinigt.index[-60]).any():
+        b.ausschlussgrund = "Unplausibler Kurssprung in den letzten 60 Tagen (mögliche Kapitalmaßnahme/Datenfehler)."
+        return b
+
+    d = indikatoren_berechnen(bereinigt)
+    d, _ = trend_analyse(d, sp)
+    d = signalpunkte_berechnen(d, sp, True)
+    d, _ = kauf_und_verkaufssignale_ermitteln(d, sp, True)
+    z = d.iloc[-1]
+    b.kurs = float(z["Close"])
+    b.veraenderung_pct = float(d["Close"].iloc[-1] / d["Close"].iloc[-2] - 1)
+    b.vorlaeufig = live and letzte_kerze_unvollstaendig(d.index, info, jetzt)
+    b.ereignissignal = aktueller_signalstatus(d, sp)["status"]
+    b.atr = float(z["ATR_14"])
+    b.liquiditaet_tl = float((d["Close"] * d["Volume"]).tail(20).mean())
+
+    gewichte = HORIZONTE[bp.horizont]["gewichte"]
+    reihen = _komponenten_reihen(d, sp, bp.max_vola_pct)
+    b.vola_pct = float(reihen.pop("_vola_pct").iloc[-1])
+    if _ist_zahl(b.vola_pct) and b.vola_pct > bp.max_vola_pct:
+        b.ausschlussgrund = (f"Volatilität {fmt_zahl(b.vola_pct, 0)} % p. a. über der Grenze des Risikoprofils "
+                             f"({fmt_zahl(bp.max_vola_pct, 0)} %).")
+        return b
+    if _ist_zahl(b.liquiditaet_tl) and b.liquiditaet_tl < bp.min_liquiditaet_tl / 5:
+        b.ausschlussgrund = f"Sehr geringe Liquidität (Ø Umsatz {fmt_volumen(b.liquiditaet_tl)} TL/Tag)."
+        return b
+    vektor = sum(gewichte[k] * reihen[k] for k in gewichte)
+    b.max_punkte = _max_positive_punkte(gewichte, sp)
+
+    # Komponenten der letzten Kerze
+    komponenten = {k: float(gewichte[k] * reihen[k].iloc[-1]) for k in gewichte}
+    b.stop = b.kurs - bp.atr_multiplikator * b.atr
+    b.ziel = b.kurs + bp.crv * (b.kurs - b.stop)
+    b.crv = bp.crv
+    zonen = unterstuetzung_widerstand_ermitteln(d.tail(250))
+    unter = [zz for zz in zonen if zz.art == "Unterstützung"]
+    ueber = [zz for zz in zonen if zz.art == "Widerstand"]
+    b.unterstuetzung = max(unter, key=lambda zz: zz.oben) if unter else None
+    b.widerstand = min(ueber, key=lambda zz: zz.unten) if ueber else None
+    risiko = b.kurs - b.stop
+    zonen_punkte = 0.0
+    if b.widerstand is not None and risiko > 0:
+        b.crv_bis_widerstand = (b.widerstand.unten - b.kurs) / risiko
+        if b.crv_bis_widerstand < 1:
+            zonen_punkte -= 1.0
+    if b.unterstuetzung is not None and b.kurs - b.unterstuetzung.oben <= b.atr:
+        zonen_punkte += 1.0
+    komponenten["zonen"] = zonen_punkte
+    stop_abstand = risiko / b.kurs if b.kurs else float("nan")
+    komponenten["stop"] = -1.0 if stop_abstand > 0.12 else 0.0
+    komponenten["liquiditaet"] = -1.0 if b.liquiditaet_tl < bp.min_liquiditaet_tl else 0.0
+    b.komponenten = komponenten
+    b.punkte = float(sum(komponenten.values()))
+    b.score_pct = b.punkte / b.max_punkte
+    b.signal = _screen_signal(b.score_pct)
+    vektor_vortag = float(vektor.iloc[-2]) / b.max_punkte
+    b.signal_vortag = _screen_signal(vektor_vortag)
+    b.neu = b.signal != SCREEN_BEOBACHTEN and _screen_signal(float(vektor.iloc[-1]) / b.max_punkte) != b.signal_vortag
+    b.ok = True
+
+    # Verständliche Begründungen (größte Beiträge zuerst)
+    texte = {
+        "basis": f"Punktesystem {punkte_text(z['Punkte'])} (RSI {fmt_zahl(z['RSI_14'], 0)}, MACD "
+                 f"{'über' if z['MACD'] > z['MACD_Signal'] else 'unter'} Signallinie)",
+        "trend": f"Trend {TREND_TEXT[int(z['Trend'])]}, ADX {fmt_zahl(z['ADX_14'], 0)}",
+        "ema": f"EMA 12 {'über' if z['EMA_12'] > z['EMA_26'] else 'unter'} EMA 26",
+        "sma50": f"Kurs {'über' if z['Close'] > z['SMA_50'] else 'unter'} SMA 50",
+        "sma_lang": f"SMA 50 {'über' if z['SMA_50'] > z['SMA_200'] else 'unter'} SMA 200",
+        "obv": f"OBV {'über' if z['OBV'] > z['OBV_SMA_20'] else 'unter'} Ø 20 (Volumenfluss)",
+        "vola": f"Volatilität {fmt_zahl(b.vola_pct, 0)} % p. a.",
+        "zonen": "Kurs nahe Unterstützung" if zonen_punkte > 0 else
+                 f"Widerstand nahe (CRV bis Widerstand {fmt_zahl(b.crv_bis_widerstand, 1)})",
+        "stop": f"Stop-Abstand {fmt_pct(stop_abstand, 1, False)} (groß)",
+        "liquiditaet": f"Geringe Liquidität (Ø {fmt_volumen(b.liquiditaet_tl)} TL/Tag)",
+    }
+    for schluessel, wert in sorted(komponenten.items(), key=lambda kv: -abs(kv[1])):
+        if wert > 0:
+            b.gruende.append(f"{texte[schluessel]} ({fmt_zahl(wert, 1, True)})")
+        elif wert < 0:
+            b.risiken.append(f"{texte[schluessel]} ({fmt_zahl(wert, 1, True)})")
+    if b.vorlaeufig:
+        b.risiken.append("Letzte Kerze noch nicht abgeschlossen – Werte vorläufig.")
+    if not b.aktuell:
+        b.risiken.append(f"Kursdaten nicht vom aktuellen Handelstag (Stand {fmt_datum(b.datum)}).")
+    b.risiko_stufe = ("hoch" if b.vola_pct >= 55 or stop_abstand > 0.12 else
+                      "mittel" if b.vola_pct >= 35 or stop_abstand > 0.07 else "niedrig")
+    return b
+
+
+def aktien_screenen(ticker_liste: Sequence[str], lade_funktion: Any, bp: BudgetParameter,
+                    sp: StrategieParameter | None = None, live: bool = True,
+                    jetzt: pd.Timestamp | None = None, fortschritt: Any = None) -> list[AktienBewertung]:
+    """Lädt und bewertet alle Aktien der Liste; sortiert nach Score (ausgeschlossene am Ende)."""
+    ergebnisse: list[AktienBewertung] = []
+    for nummer, eingabe in enumerate(ticker_liste, start=1):
+        if fortschritt is not None:
+            fortschritt(nummer / max(len(ticker_liste), 1), eingabe)
+        try:
+            basis = ticker_normalisieren(eingabe).basis
+        except DatenFehler as fehler:
+            ergebnisse.append(AktienBewertung(ticker=str(eingabe), ausschlussgrund=fehler.meldung))
+            continue
+        try:
+            paket = lade_funktion(basis)
+            if paket.ist_index:
+                ergebnisse.append(AktienBewertung(ticker=basis, ausschlussgrund="Index – nicht direkt investierbar."))
+                continue
+            ergebnisse.append(aktie_bewerten(basis, paket.daten, bp, sp, name=paket.name, symbol=paket.symbol,
+                                             live=live, jetzt=jetzt))
+        except DatenFehler as fehler:
+            ergebnisse.append(AktienBewertung(ticker=basis, ausschlussgrund=fehler.meldung))
+        except Exception as exc:  # einzelne Fehler dürfen die Auswertung nicht abbrechen
+            ergebnisse.append(AktienBewertung(ticker=basis, ausschlussgrund=f"Fehler: {type(exc).__name__}: {exc}"))
+    return sorted(ergebnisse, key=lambda x: (not x.ok, -x.score_pct if x.ok else 0))
+
+
+@dataclass
+class PortfolioErgebnis:
+    positionen: pd.DataFrame
+    budget: float
+    reserve: float
+    investiert: float
+    gebuehren: float
+    liquiditaet: float
+    max_verlust: float
+    hinweise: list[str] = field(default_factory=list)
+
+
+def portfolio_aufteilen(bewertungen: Sequence[AktienBewertung], bp: BudgetParameter) -> PortfolioErgebnis:
+    """Beispielhafte, risikobasierte Aufteilung des Budgets.
+
+    Stückzahl = min(Risikobudget je Position / Positionsrisiko, Zielbetrag / Kurs inkl. Gebühren);
+    Positionsrisiko = Einstiegskurs − Stop-Loss (+ Gebühren und Slippage). Anschließend werden
+    Höchstanteil, Mindestanteil, Gesamtrisiko des Portfolios und die Liquiditätsreserve eingehalten.
+    Es werden nur ganze Aktien verwendet (BIST: Handel in ganzen Stück).
+    """
+    gebuehr, slip = bp.gebuehren_pct / 100, bp.slippage_pct / 100
+    reserve = min(max(bp.budget * bp.reserve_pct / 100, bp.reserve_min_tl), bp.budget)
+    investierbar = bp.budget - reserve
+    hinweise: list[str] = []
+    kandidaten = [b for b in bewertungen if b.ok and b.signal in (SCREEN_STARK_KAUF, SCREEN_KAUF)
+                  and _ist_zahl(b.atr) and b.atr > 0][: bp.max_positionen]
+    spalten = ["Aktie", "Ticker", "Signal", "Score", "Betrag (TL)", "Anteil", "Stück", "Kurs (verwendet)",
+               "Restbetrag (TL)", "Stop-Loss", "Kursziel", "Max. Verlust bis Stop (TL)", "Gebühren (TL)",
+               "Gründe", "Risiken"]
+    if not kandidaten:
+        hinweise.append("Keine Aktie erfüllt aktuell die Kriterien für ein Kaufsignal – das Budget bleibt vollständig "
+                        "Liquidität.")
+        return PortfolioErgebnis(pd.DataFrame(columns=spalten), bp.budget, reserve, 0.0, 0.0, bp.budget, 0.0, hinweise)
+    if len(kandidaten) < 2:
+        hinweise.append("Nur eine Aktie mit positivem Signal – der Höchstanteil begrenzt die Position, der Rest bleibt "
+                        "Liquidität.")
+
+    # Zielanteile nach Score gewichten und auf Mindest-/Höchstanteil begrenzen
+    gewichte = np.array([max(b.score_pct, 0.01) for b in kandidaten])
+    anteile = gewichte / gewichte.sum() * investierbar / bp.budget * 100
+    anteile = np.clip(anteile, bp.min_anteil_pct, bp.max_anteil_pct)
+    if anteile.sum() > investierbar / bp.budget * 100:
+        anteile *= (investierbar / bp.budget * 100) / anteile.sum()
+
+    zeilen = []
+    for b, anteil in zip(kandidaten, anteile, strict=True):
+        einstieg = b.kurs * (1 + slip)
+        stop = einstieg - bp.atr_multiplikator * b.atr
+        if stop <= 0:
+            hinweise.append(f"{b.ticker}: Stop-Loss wäre ≤ 0 – ausgelassen.")
+            continue
+        ziel = einstieg + bp.crv * (einstieg - stop)
+        risiko_je_aktie = (einstieg - stop) + einstieg * gebuehr + stop * (gebuehr + slip)
+        stueck_risiko = math.floor(bp.budget * bp.verlust_position_pct / 100 / risiko_je_aktie)
+        zielbetrag = bp.budget * anteil / 100
+        stueck_kapital = math.floor(zielbetrag / (einstieg * (1 + gebuehr)))
+        stueck = max(0, min(stueck_risiko, stueck_kapital))
+        begrenzung = "Risiko" if stueck_risiko < stueck_kapital else "Betrag"
+        zeilen.append({"b": b, "anteil_ziel": anteil, "einstieg": einstieg, "stop": stop, "ziel": ziel,
+                       "risiko": risiko_je_aktie, "stueck": stueck, "zielbetrag": zielbetrag, "grenze": begrenzung})
+
+    # Gesamtrisiko des Portfolios begrenzen
+    limit = bp.budget * bp.verlust_portfolio_pct / 100
+    gesamt = sum(z["stueck"] * z["risiko"] for z in zeilen)
+    if gesamt > limit > 0:
+        faktor = limit / gesamt
+        for z in zeilen:
+            z["stueck"] = math.floor(z["stueck"] * faktor)
+        hinweise.append(f"Stückzahlen wurden gekürzt, damit der maximale Gesamtverlust "
+                        f"{fmt_pct(bp.verlust_portfolio_pct / 100, 1, False)} des Budgets nicht übersteigt.")
+
+    ergebnis_zeilen, investiert, gebuehren_summe, max_verlust = [], 0.0, 0.0, 0.0
+    for z in zeilen:
+        b = z["b"]
+        if z["stueck"] <= 0:
+            hinweise.append(f"{b.ticker}: Budget bzw. Risikogrenze reicht nicht für eine ganze Aktie.")
+            continue
+        betrag = z["stueck"] * z["einstieg"]
+        kosten = betrag * gebuehr
+        if betrag < bp.budget * bp.min_anteil_pct / 100 * 0.5:
+            hinweise.append(f"{b.ticker}: Position durch das Risikolimit klein ({fmt_tl(betrag, 0)}).")
+        verlust = z["stueck"] * z["risiko"]
+        investiert += betrag
+        gebuehren_summe += kosten
+        max_verlust += verlust
+        ergebnis_zeilen.append({
+            "Aktie": b.name, "Ticker": b.ticker, "Signal": b.signal, "Score": round(b.score_pct * 100, 1),
+            "Betrag (TL)": betrag, "Anteil": betrag / bp.budget, "Stück": int(z["stueck"]),
+            "Kurs (verwendet)": z["einstieg"], "Restbetrag (TL)": z["zielbetrag"] - betrag - kosten,
+            "Stop-Loss": z["stop"], "Kursziel": z["ziel"], "Max. Verlust bis Stop (TL)": verlust,
+            "Gebühren (TL)": kosten, "Gründe": "; ".join(b.gruende[:3]) or "–",
+            "Risiken": "; ".join(b.risiken[:3] + [f"Stückzahl begrenzt durch {z['grenze']}"]),
+        })
+    positionen = pd.DataFrame(ergebnis_zeilen, columns=spalten)
+    if len(positionen) == 1:
+        hinweise.append("Nur eine Position möglich – bewusst keine Investition des gesamten Betrags in diese Aktie.")
+    liquiditaet = bp.budget - investiert - gebuehren_summe
+    return PortfolioErgebnis(positionen, bp.budget, reserve, investiert, gebuehren_summe, liquiditaet, max_verlust,
+                             hinweise)
+
+
+def szenarien_berechnen(portfolio: PortfolioErgebnis, bewertungen: Sequence[AktienBewertung],
+                        bp: BudgetParameter) -> pd.DataFrame:
+    """Drei beispielhafte Szenarien über den Anlagehorizont (keine Prognose)."""
+    tage = HORIZONTE[bp.horizont]["tage"]
+    gebuehr, slip, steuer = bp.gebuehren_pct / 100, bp.slippage_pct / 100, bp.steuer_pct / 100
+    nach_ticker = {b.ticker: b for b in bewertungen}
+    beschreibung = {
+        "Vorsichtiges Szenario": f"Jede Aktie fällt um eine Standardabweichung über {tage} Handelstage; "
+                                 "unterhalb des Stop-Loss wird zum Stop verkauft.",
+        "Neutrales Szenario": "Kurse bleiben unverändert; es fallen nur Kauf- und Verkaufskosten an.",
+        "Positives Szenario": f"Jede Aktie steigt um eine Standardabweichung über {tage} Handelstage, "
+                              "höchstens bis zum Kursziel.",
+    }
+    zeilen = []
+    for name in beschreibung:
+        wert = portfolio.liquiditaet
+        for _, pos in portfolio.positionen.iterrows():
+            b = nach_ticker[pos["Ticker"]]
+            sigma = (b.vola_pct / 100 / math.sqrt(HANDELSTAGE_PRO_JAHR)) * math.sqrt(tage) if _ist_zahl(b.vola_pct) else 0.1
+            einstieg = pos["Kurs (verwendet)"]
+            if name.startswith("Vorsichtig"):
+                preis = max(pos["Stop-Loss"], einstieg * (1 - sigma))
+            elif name.startswith("Positiv"):
+                preis = min(pos["Kursziel"], einstieg * (1 + sigma))
+            else:
+                preis = einstieg
+            wert += pos["Stück"] * preis * (1 - slip) * (1 - gebuehr)
+        ergebnis = wert - portfolio.budget
+        nach_steuer = ergebnis - max(ergebnis, 0) * steuer
+        zeilen.append({"Szenario": name, "Annahme": beschreibung[name], "Portfolio-Wert (TL)": wert,
+                       "Gewinn/Verlust (TL)": ergebnis, "Ergebnis": ergebnis / portfolio.budget,
+                       "Gewinn/Verlust nach Steuern (TL)": nach_steuer})
+    return pd.DataFrame(zeilen)
+
+
+# --- Oberfläche: Budget & Aktienauswahl ---------------------------------------------------------------------
+
+ANSICHT_EINZEL = "Einzelanalyse"
+ANSICHT_BUDGET = "Budget & Aktienauswahl"
+
+
+def _budget_seitenleiste() -> dict[str, Any]:
+    """Seitenleiste der Budgetplanung."""
+    sb = st.sidebar
+    quellen = [QUELLE_YAHOO, QUELLE_BORSAPY, QUELLE_DEMO]
+    standard = st.session_state.get("quelle", QUELLE_YAHOO)
+    quelle = sb.selectbox("Datenquelle", quellen, index=quellen.index(standard) if standard in quellen else 0,
+                          key="quelle_budget", help="Für die Aktienauswahl werden mehrere Werte geladen "
+                                                    "(CSV ist hier nicht möglich).")
+    budget = sb.number_input("Wie viel möchtest du investieren? Betrag in TL", min_value=1.0, max_value=1e12,
+                             value=100_000.0, step=1_000.0, format="%.2f", key="budget_betrag")
+    sb.caption(f"Budget: **{fmt_tl(budget)}**")
+    profil_label = sb.radio("Risikoprofil", list(RISIKO_LABEL.values()), index=1, key="budget_profil")
+    profil = next(k for k, v in RISIKO_LABEL.items() if v == profil_label)
+    horizont = sb.radio("Anlagehorizont", list(HORIZONTE), index=1, horizontal=True, key="budget_horizont",
+                        help="kurzfristig ≈ 1 Monat, mittelfristig ≈ 3 Monate, langfristig ≈ 1 Jahr. "
+                             "Beeinflusst Gewichtung, ATR-Stop und Chance-Risiko-Verhältnis.")
+    liste = sb.text_area("Analysierte Aktien (Kürzel, durch Komma getrennt)", ", ".join(STANDARD_AKTIENLISTE),
+                         key="budget_liste", height=120)
+    p, h = RISIKOPROFILE[profil], HORIZONTE[horizont]
+    schluessel = f"{profil}_{horizont}"   # neue Standardwerte bei Profil-/Horizontwechsel
+    with sb.expander("Risiko & Positionsgrößen"):
+        verlust_pos = st.number_input("Max. Verlust pro Position (% des Budgets)", 0.1, 10.0,
+                                      float(p["verlust_position"]), 0.1, key=f"b_vp_{schluessel}")
+        verlust_port = st.number_input("Max. Gesamtverlust des Portfolios (%)", 0.5, 50.0,
+                                       float(p["verlust_portfolio"]), 0.5, key=f"b_vg_{schluessel}")
+        atr_mult = st.number_input("Stop-Loss: ATR-Multiplikator", 0.5, 6.0, float(h["atr_multiplikator"]), 0.1,
+                                   key=f"b_atr_{schluessel}")
+        crv = st.number_input("Chance-Risiko-Verhältnis (Kursziel)", 0.5, 6.0, float(h["crv"]), 0.1,
+                              key=f"b_crv_{schluessel}")
+        reserve_pct = st.number_input("Liquiditätsreserve (% des Budgets)", 0.0, 95.0, float(p["reserve"]), 1.0,
+                                      key=f"b_res_{schluessel}")
+        reserve_tl = st.number_input("Mindest-Liquiditätsreserve (TL)", 0.0, 1e12, 0.0, 1_000.0, format="%.2f",
+                                     key="b_res_tl")
+        min_anteil, max_anteil = st.slider("Anteil je Aktie: Minimum / Maximum (%)", 1, 50,
+                                           (int(p["min_anteil"]), int(p["max_anteil"])), key=f"b_ant_{schluessel}",
+                                           help="Höchstens 50 % – das Budget fließt nie vollständig in eine Aktie.")
+        max_pos = st.slider("Max. Anzahl gleichzeitiger Positionen", 2, 12, int(p["max_positionen"]),
+                            key=f"b_pos_{schluessel}")
+        max_vola = st.slider("Max. Volatilität p. a. (%) – darüber Ausschluss", 20, 150, int(p["max_vola"]),
+                             key=f"b_vola_{schluessel}")
+        min_liq = st.number_input("Mindest-Liquidität (Ø Umsatz, Mio. TL/Tag)", 0.0, 10_000.0, 20.0, 5.0,
+                                  key="b_liq", help="Darunter Punktabzug, unter einem Fünftel Ausschluss.")
+    with sb.expander("Gebühren, Slippage & Steuern"):
+        gebuehren = st.number_input("Gebühren je Order (%)", 0.0, 3.0, 0.10, 0.01, format="%.2f", key="b_geb")
+        slippage = st.number_input("Slippage je Ausführung (%)", 0.0, 3.0, 0.05, 0.01, format="%.2f", key="b_slip")
+        steuer = st.number_input("Steuer auf Kursgewinne (%)", 0.0, 60.0, 0.0, 0.5, key="b_steuer",
+                                 help="Nur für die Szenarien. Bitte die aktuell gültige Regelung für deine Situation "
+                                      "prüfen.")
+    bp = BudgetParameter.aus_profil(
+        float(budget), profil, horizont, verlust_position_pct=float(verlust_pos),
+        verlust_portfolio_pct=float(verlust_port), atr_multiplikator=float(atr_mult), crv=float(crv),
+        reserve_pct=float(reserve_pct), reserve_min_tl=float(reserve_tl), min_anteil_pct=float(min_anteil),
+        max_anteil_pct=float(max_anteil), max_positionen=int(max_pos), max_vola_pct=float(max_vola),
+        min_liquiditaet_tl=float(min_liq) * 1e6, gebuehren_pct=float(gebuehren), slippage_pct=float(slippage),
+        steuer_pct=float(steuer))
+    ticker = [t.strip() for t in re.split(r"[,;\s]+", liste) if t.strip()]
+    return {"quelle": quelle, "bp": bp, "ticker": list(dict.fromkeys(ticker))}
+
+
+def _bewertungstabelle(bewertungen: Sequence[AktienBewertung]) -> pd.DataFrame:
+    zeilen = []
+    for rang, b in enumerate([x for x in bewertungen if x.ok], start=1):
+        zeilen.append({
+            "Rang": rang, "Aktie": f"{b.name} ({b.ticker})", "Signal": b.signal,
+            "Score": f"{fmt_zahl(b.punkte, 1, True)} Pkt. ({fmt_pct(b.score_pct, 0, True)})",
+            "Kurs": b.kurs, "Veränderung": b.veraenderung_pct, "Risiko": b.risiko_stufe,
+            "Begründung": "; ".join(b.gruende[:2] + [f"Risiko: {r}" for r in b.risiken[:1]]) or "–",
+        })
+    return pd.DataFrame(zeilen, columns=["Rang", "Aktie", "Signal", "Score", "Kurs", "Veränderung", "Risiko",
+                                         "Begründung"])
+
+
+def budget_ansicht_starten() -> None:
+    """Budgetplanung, Aktienauswahl, Marktüberblick, Aufteilung und Szenarien."""
+    e = _budget_seitenleiste()
+    bp: BudgetParameter = e["bp"]
+    st.title("Budgetplanung & aktuelle Kaufbewertung")
+    st.caption(BUDGET_TITEL)
+    st.error(BUDGET_WARNHINWEIS, icon=":material/gavel:")
+    fehler = bp.pruefen()
+    if fehler:
+        for text in fehler:
+            st.error(text)
+        st.stop()
+    if not e["ticker"]:
+        st.warning("Bitte mindestens ein Börsenkürzel in der Seitenleiste eingeben.")
+        st.stop()
+
+    quelle = e["quelle"]
+    live = quelle in LIVE_QUELLEN
+    jetzt = _jetzt_istanbul()
+    balken = st.progress(0.0, text="Lade und bewerte Aktien …")
+
+    def laden(basis: str) -> DatenPaket:
+        return _daten_laden_gecacht(basis, "1 Jahr", "Täglich", quelle, STANDARD_SUFFIX, False, True, None)
+
+    bewertungen = aktien_screenen(e["ticker"], laden, bp, StrategieParameter(), live=live, jetzt=jetzt,
+                                  fortschritt=lambda anteil, t: balken.progress(anteil, text=f"Analysiere {t} …"))
+    balken.empty()
+    gueltig = [b for b in bewertungen if b.ok]
+    ausgeschlossen = [b for b in bewertungen if not b.ok]
+    portfolio = portfolio_aufteilen(bewertungen, bp)
+    szenarien = szenarien_berechnen(portfolio, bewertungen, bp)
+    erstellt = datetime.now()
+    verzoegert = {QUELLE_YAHOO: "verzögert (in der Regel ≥ 15 Minuten), keine Echtzeitdaten",
+                  QUELLE_BORSAPY: "verzögert (ca. 15 Minuten), keine Echtzeitdaten",
+                  QUELLE_DEMO: "DEMO – synthetische Kurse, keine Marktdaten"}[quelle]
+    if quelle == QUELLE_DEMO:
+        st.error("DEMO-MODUS: synthetische Kurse – für echte Werte die Datenquelle Yahoo Finance wählen.",
+                 icon=":material/science:")
+    if not gueltig:
+        st.error("Für keine Aktie liegen ausreichende, aktuelle Kursdaten vor. Details unter „Transparenz“.")
+
+    # ---------------------------------------------------------------- 10) Zusammenfassung
+    st.subheader("Zusammenfassung")
+    staerkste = next((b for b in gueltig if b.signal in (SCREEN_STARK_KAUF, SCREEN_KAUF)), None)
+    a, b_, c, d = st.columns(4)
+    a.metric("Budget", fmt_tl(bp.budget), border=True)
+    b_.metric("Risikoprofil / Horizont", f"{bp.risikoprofil} · {bp.horizont}", border=True)
+    c.metric("Vorgeschlagene Positionen", str(len(portfolio.positionen)), border=True)
+    d.metric("Liquidität (inkl. Reserve)", fmt_tl(portfolio.liquiditaet, 0), border=True,
+             help=f"Davon Reserve {fmt_tl(portfolio.reserve, 0)}; der Rest ist nicht investierbar gewesen.")
+    a, b_, c, d = st.columns(4)
+    a.metric("Investiert (Beispiel)", fmt_tl(portfolio.investiert, 0), border=True)
+    b_.metric("Max. berechnetes Risiko", fmt_tl(portfolio.max_verlust, 0), border=True,
+              help="Summe der Verluste, falls alle Positionen ihren Stop-Loss erreichen (inkl. Kosten).")
+    c.metric("Risiko in % des Budgets", fmt_pct(portfolio.max_verlust / bp.budget, 2, False), border=True)
+    if len(portfolio.positionen):
+        durchschnitt = float(np.average(portfolio.positionen["Score"], weights=portfolio.positionen["Betrag (TL)"]))
+        d.metric("Ø Score des Beispielportfolios", f"{fmt_zahl(durchschnitt, 1)} %", border=True)
+    else:
+        d.metric("Ø Score des Beispielportfolios", "–", border=True)
+    if staerkste is not None:
+        st.success(f"**{staerkste.name} ({staerkste.ticker}):** {TOP_FORMULIERUNG} Score "
+                   f"{fmt_zahl(staerkste.punkte, 1, True)} Punkte ({fmt_pct(staerkste.score_pct, 0)}), Signal "
+                   f"„{staerkste.signal}“.", icon=":material/insights:")
+    else:
+        st.info("Nach den ausgewählten technischen Kriterien zeigt derzeit keine Aktie ein positives Signal.")
+    for hinweis in portfolio.hinweise:
+        st.info(hinweis, icon=":material/info:")
+
+    # ---------------------------------------------------------------- 6) Marktüberblick
+    st.subheader("Marktüberblick für den ausgewählten Handelstag")
+    status = markt_status(jetzt)
+    handelstag = erwarteter_handelstag(jetzt)
+    aktuelle = sum(b.aktuell for b in gueltig)
+    letzte = max((b.datum for b in gueltig if b.datum is not None), default=None)
+    a, b_, c = st.columns(3)
+    a.metric("Borsa İstanbul (Uhrzeit Istanbul)", status["text"], border=True, help=status["hinweis"])
+    b_.metric("Letzte Kursdaten", fmt_datum(letzte) if letzte is not None else "–", border=True,
+              help=f"Erwarteter Handelstag: {fmt_datum(handelstag)}. Datenqualität: {verzoegert}.")
+    c.metric("Daten aktuell", f"{aktuelle} von {len(gueltig)} Aktien", border=True)
+    st.caption(f"Handelstag: {fmt_datum(handelstag)} · Analyse erstellt: {erstellt.strftime('%d.%m.%Y %H:%M')} · "
+               f"Daten: {verzoegert}.")
+    tabelle = _bewertungstabelle(bewertungen)
+    st.dataframe(tabelle.style.map(_farbe_fuer_text, subset=["Signal"])
+                 .map(_farbe_fuer_zahl, subset=["Veränderung"])
+                 .format({"Kurs": lambda v: fmt_tl(v), "Veränderung": lambda v: fmt_pct(v)}),
+                 hide_index=True, height=_tabellenhoehe(min(len(tabelle), 20)))
+    neu = [b for b in gueltig if b.neu]
+    fortgesetzt = [b for b in gueltig if not b.neu and b.signal != SCREEN_BEOBACHTEN]
+    x, y, z = st.columns(3)
+    with x:
+        st.markdown("**Neues Signal heute**")
+        st.markdown("\n".join(f"- {b.ticker}: {b.signal} (vorher: {b.signal_vortag})" for b in neu) or "– keine –")
+    with y:
+        st.markdown("**Bestehendes Signal fortgesetzt**")
+        st.markdown("\n".join(f"- {b.ticker}: {b.signal}" for b in fortgesetzt) or "– keine –")
+    with z:
+        st.markdown("**Nicht berücksichtigen (Volatilität, Daten)**")
+        st.markdown("\n".join(f"- {b.ticker}: {b.ausschlussgrund}" for b in ausgeschlossen) or "– keine –")
+
+    # ---------------------------------------------------------------- 3) Aktuelle Signale je Aktie
+    st.subheader("Aktuelle Signale je Aktie")
+    st.caption(f"Signalstufen nach Score in % der erreichbaren Punkte: ≥ 50 % {SCREEN_STARK_KAUF}, ≥ 25 % "
+               f"{SCREEN_KAUF}, ≤ −25 % {SCREEN_VERKAUF}, ≤ −50 % {SCREEN_STARK_VERKAUF}, sonst {SCREEN_BEOBACHTEN}.")
+    for b in gueltig:
+        titel = (f"{b.ticker} · {b.name} — {b.signal} · Score {fmt_zahl(b.punkte, 1, True)} Pkt. "
+                 f"({fmt_pct(b.score_pct, 0)}) · {fmt_tl(b.kurs)} ({fmt_pct(b.veraenderung_pct)})")
+        with st.expander(titel):
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("Kurs", fmt_tl(b.kurs), fmt_pct(b.veraenderung_pct), border=True)
+            k2.metric("ATR-Stop-Loss", fmt_tl(b.stop), fmt_pct(b.stop / b.kurs - 1), border=True)
+            k3.metric("Mögliches Kursziel", fmt_tl(b.ziel), fmt_pct(b.ziel / b.kurs - 1), border=True)
+            k4.metric("Chance-Risiko-Verhältnis", fmt_zahl(b.crv, 1), border=True,
+                      help=f"Bis zum nächsten Widerstand: {fmt_zahl(b.crv_bis_widerstand, 1)}")
+            zone_u = (f"{fmt_zahl(b.unterstuetzung.unten)}–{fmt_zahl(b.unterstuetzung.oben)}"
+                      if b.unterstuetzung else "keine erkannt")
+            zone_w = (f"{fmt_zahl(b.widerstand.unten)}–{fmt_zahl(b.widerstand.oben)}"
+                      if b.widerstand else "keine erkannt")
+            st.markdown(
+                f"- **Signalstärke:** {fmt_zahl(b.punkte, 1, True)} von max. {fmt_zahl(b.max_punkte, 1)} Punkten "
+                f"({fmt_pct(b.score_pct, 0)}) · Regel-Ereignissignal (MACD): {b.ereignissignal}\n"
+                f"- **Gründe:** {'; '.join(b.gruende) or '–'}\n"
+                f"- **Risiken:** {'; '.join(b.risiken) or '–'}\n"
+                f"- **Unterstützungszone:** {zone_u} · **Widerstandszone:** {zone_w}\n"
+                f"- **Volatilität:** {fmt_zahl(b.vola_pct, 0)} % p. a. · **Ø Umsatz:** "
+                f"{fmt_volumen(b.liquiditaet_tl)} TL/Tag · **Risikostufe:** {b.risiko_stufe}\n"
+                f"- **Letzte Kursdaten:** {fmt_datum(b.datum)}{' (vorläufig, Handel läuft)' if b.vorlaeufig else ''}"
+                f" · {verzoegert}")
+
+    # ---------------------------------------------------------------- 4/5) Budgetaufteilung
+    st.subheader("Beispielhafte Budgetaufteilung (risikobasiert)")
+    st.caption(f"Stückzahl = min(max. Verlust je Position ÷ Positionsrisiko, Zielbetrag ÷ Kurs inkl. Gebühren); "
+               f"Positionsrisiko = Einstiegskurs − Stop-Loss ({fmt_zahl(bp.atr_multiplikator, 1)} × ATR) zzgl. "
+               f"Kosten. Nur ganze Aktien. Anteil je Aktie {fmt_zahl(bp.min_anteil_pct, 0)}–"
+               f"{fmt_zahl(bp.max_anteil_pct, 0)} %, max. {bp.max_positionen} Positionen, Reserve "
+               f"{fmt_pct(portfolio.reserve / bp.budget, 0, False)}.")
+    if len(portfolio.positionen):
+        geld = {s: (lambda v: fmt_tl(v)) for s in ("Betrag (TL)", "Kurs (verwendet)", "Restbetrag (TL)",
+                                                     "Stop-Loss", "Kursziel", "Max. Verlust bis Stop (TL)",
+                                                     "Gebühren (TL)")}
+        st.dataframe(portfolio.positionen.style.map(_farbe_fuer_text, subset=["Signal"])
+                     .format({**geld, "Anteil": lambda v: fmt_pct(v, 1, False), "Score": lambda v: f"{fmt_zahl(v, 1)} %"}),
+                     hide_index=True)
+        st.markdown("**Gründe und Risiken je Position**\n" + "\n".join(
+            f"- **{pos['Ticker']}** ({pos['Stück']} Stück · {fmt_tl(pos['Betrag (TL)'], 0)} · Stop "
+            f"{fmt_tl(pos['Stop-Loss'])} · Ziel {fmt_tl(pos['Kursziel'])} · max. Verlust "
+            f"{fmt_tl(pos['Max. Verlust bis Stop (TL)'], 0)})  \n  Gründe: {pos['Gründe']}  \n  Risiken: {pos['Risiken']}"
+            for _, pos in portfolio.positionen.iterrows()))
+        st.markdown(f"**Investiert:** {fmt_tl(portfolio.investiert)} · **Gebühren (Kauf):** "
+                    f"{fmt_tl(portfolio.gebuehren)} · **Liquidität gesamt:** {fmt_tl(portfolio.liquiditaet)} "
+                    f"(Reserve {fmt_tl(portfolio.reserve)} + nicht verwendeter Restbetrag)")
+    else:
+        st.info("Keine Positionen im Beispielportfolio.")
+
+    # ---------------------------------------------------------------- 7) Szenarien
+    st.subheader("Drei Szenarien")
+    st.warning("Die Szenarien sind keine Prognose und keine Garantie. Sie zeigen nur, wie sich das Beispielportfolio "
+               "unter vereinfachten Annahmen entwickeln könnte.", icon=":material/warning:")
+    st.dataframe(szenarien.drop(columns=["Annahme"]).style
+                 .map(_farbe_fuer_zahl, subset=["Gewinn/Verlust (TL)", "Ergebnis"])
+                 .format({"Portfolio-Wert (TL)": fmt_tl, "Gewinn/Verlust (TL)": fmt_tl,
+                          "Gewinn/Verlust nach Steuern (TL)": fmt_tl, "Ergebnis": lambda v: fmt_pct(v)}),
+                 hide_index=True)
+    st.markdown("**Zugrunde liegende Annahmen**\n" + "\n".join(
+        f"- **{z['Szenario']}:** {z['Annahme']}" for _, z in szenarien.iterrows())
+        + "\n- Volatilität je Aktie aus den letzten 20 Handelstagen; Verkaufskosten und Slippage sind abgezogen; "
+          "die Liquidität bleibt unverändert (ohne Zinsen).")
+
+    # ---------------------------------------------------------------- 8) Transparenz
+    st.subheader("Transparenz")
+    gewichte = HORIZONTE[bp.horizont]["gewichte"]
+    st.markdown(
+        f"- **Analysierte Aktien ({len(bewertungen)}):** {', '.join(b.ticker for b in bewertungen)}\n"
+        f"- **Datenquelle:** {quelle} · **Datenqualität:** {verzoegert}\n"
+        f"- **Analyse erstellt:** {erstellt.strftime('%d.%m.%Y %H:%M:%S')} (Istanbul: "
+        f"{jetzt.strftime('%d.%m.%Y %H:%M')})\n"
+        f"- **Gebühren:** {fmt_zahl(bp.gebuehren_pct, 2)} % je Order berücksichtigt · **Slippage:** "
+        f"{fmt_zahl(bp.slippage_pct, 2)} % berücksichtigt · **Steuern:** "
+        + (f"{fmt_zahl(bp.steuer_pct, 1)} % auf Gewinne in den Szenarien" if bp.steuer_pct else
+           "nicht berücksichtigt (0 %) – bitte selbst prüfen")
+        + "\n- **Einflussfaktoren (Gewichte für " + bp.horizont + "):** "
+        + ", ".join(f"{KOMPONENTEN_NAMEN[k]} × {fmt_zahl(v, 1)}" for k, v in gewichte.items())
+        + f", {KOMPONENTEN_NAMEN['zonen']} ±1, {KOMPONENTEN_NAMEN['stop']} −1, {KOMPONENTEN_NAMEN['liquiditaet']} −1")
+    if ausgeschlossen:
+        st.markdown("**Ausgeschlossene Aktien**")
+        st.dataframe(pd.DataFrame([{"Aktie": b.ticker, "Grund": b.ausschlussgrund} for b in ausgeschlossen]),
+                     hide_index=True)
+    if gueltig:
+        with st.expander("Beitrag jeder Komponente zum Score"):
+            beitraege = pd.DataFrame([{"Aktie": b.ticker, **{KOMPONENTEN_NAMEN[k]: v for k, v in b.komponenten.items()},
+                                       "Summe": b.punkte} for b in gueltig])
+            st.dataframe(beitraege.style.format(lambda v: fmt_zahl(v, 1, True), subset=beitraege.columns[1:]),
+                         hide_index=True)
+    a, b_ = st.columns(2)
+    a.download_button("Bewertungen (CSV)", als_csv(tabelle, True, index=False), "bist_bewertungen.csv", "text/csv",
+                      on_click="ignore", icon=":material/download:")
+    b_.download_button("Beispielportfolio (CSV)", als_csv(portfolio.positionen, True, index=False),
+                       "bist_beispielportfolio.csv", "text/csv", on_click="ignore", icon=":material/download:")
+    st.divider()
+    st.caption(f"{BUDGET_TITEL} {BUDGET_WARNHINWEIS}")
 
 
 # =============================================================================
